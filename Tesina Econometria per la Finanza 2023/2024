@@ -1,0 +1,2444 @@
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+# Lista dei titoli in portafoglio
+stocks = ['AAPL', 'AMZN', 'MSFT', 'META']
+# Download dei dati dei prezzi giornalieri per ogni azione nel portafoglio
+data = yf.download(stocks, start='2010-01-01', end='2020-01-01')['Adj Close']
+data.sort_index(inplace=True)
+# Converte i prezzi giornalieri in rendimenti giornalieri
+returns = data.pct_change()
+# Calcolo della media e la covarianza dei redimenti giornalieri
+mean_daily_returns = returns.mean()
+cov_matrix = returns.cov()
+
+# Imposta il numero di simulazioni
+num_portfolios = 25000
+# Imposta un array dei risultati
+results = np.zeros((3, num_portfolios))
+
+for i in range(num_portfolios):
+    # Selezioni di pesi random
+    weights = np.random.random(4)
+    # Ribilanciamento dei pesi per avere somma 1
+    weights /= np.sum(weights)
+
+    # Calcolo dei rendimenti e volatilità del portafoglio
+    portfolio_return = np.sum(mean_daily_returns * weights) * 252
+    portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(252)
+
+    # Memorizzazioni nell'array dei risultati
+    results[0, i] = portfolio_return
+    results[1, i] = portfolio_std_dev
+    # Memorizzazione dello Sharpe Ratio - elemento risk free escluso per semplicità
+    results[2, i] = results[0, i] / results[1, i]
+
+# Converi l'array dei risultati in un dataframe pandas
+results_frame = pd.DataFrame(results.T, columns=['ret', 'stdev', 'sharpe'])
+
+# Trova i portafogli con il miglior Sharpe ratio e la più bassa volatilità
+max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
+min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
+
+# Visualizzazione dei risultati in formato tabellare
+print("Portfolio con il massimo Sharpe Ratio:")
+print(max_sharpe_port.to_frame().T)
+print("\nPortfolio con la minima volatilità:")
+print(min_vol_port.to_frame().T)
+
+# Visualizzazione del grafico
+plt.figure(figsize=(14, 8))
+scatter = plt.scatter(results_frame.stdev, results_frame.ret, c=results_frame.sharpe, cmap='viridis', marker='o', s=20, alpha=0.75, edgecolors='w')
+plt.colorbar(scatter, label='Rapporto di Sharpe')
+plt.xlabel('Volatilità (Deviazione Standard)', fontsize=12)
+plt.ylabel('Rendimenti Attesi', fontsize=12)
+plt.title('Ottimizzazione del Portafoglio con Frontera Efficiente', fontsize=14)
+
+#################################################################################################################### MIN V & MAX SHARPE
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+# Lista dei titoli in portafoglio
+stocks = ['AAPL', 'AMZN', 'MSFT', 'META']
+# Download dei dati dei prezzi giornalieri per ogni azione nel portafoglio
+data = yf.download(stocks, start='2010-01-01', end='2020-01-01')['Adj Close']
+data.sort_index(inplace=True)
+# Converte i prezzi giornalieri in rendimenti giornalieri
+returns = data.pct_change()
+# Calcolo della media e la covarianza dei redimenti giornalieri
+mean_daily_returns = returns.mean()
+cov_matrix = returns.cov()
+
+# Imposta il numero di simulazioni
+num_portfolios = 25000
+# Imposta un array dei risultati
+results = np.zeros((3, num_portfolios))
+
+for i in range(num_portfolios):
+    # Selezioni di pesi random
+    weights = np.random.random(4)
+    # Ribilanciamento dei pesi per avere somma 1
+    weights /= np.sum(weights)
+
+    # Calcolo dei rendimenti e volatilità del portafoglio
+    portfolio_return = np.sum(mean_daily_returns * weights) * 252
+    portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(252)
+
+    # Memorizzazioni nell'array dei risultati
+    results[0, i] = portfolio_return
+    results[1, i] = portfolio_std_dev
+    # Memorizzazione dello Sharpe Ratio - elemento risk free escluso per semplicità
+    results[2, i] = results[0, i] / results[1, i]
+
+# Converi l'array dei risultati in un dataframe pandas
+results_frame = pd.DataFrame(results.T, columns=['ret', 'stdev', 'sharpe'])
+
+# Trova i portafogli con il miglior Sharpe ratio e la più bassa volatilità
+max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
+min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
+
+# Visualizzazione dei risultati in formato tabellare
+print("Portfolio con il massimo Sharpe Ratio:")
+print(max_sharpe_port.to_frame().T)
+print("\nPortfolio con la minima volatilità:")
+print(min_vol_port.to_frame().T)
+
+# Visualizzazione del grafico
+plt.figure(figsize=(14, 8))
+scatter = plt.scatter(results_frame.stdev, results_frame.ret, c=results_frame.sharpe, cmap='viridis', marker='o', s=20, alpha=0.75, edgecolors='w')
+plt.colorbar(scatter, label='Rapporto di Sharpe')
+plt.xlabel('Volatilità (Deviazione Standard)', fontsize=12)
+plt.ylabel('Rendimenti Attesi', fontsize=12)
+plt.title('Ottimizzazione del Portafoglio con Frontera Efficiente', fontsize=14)
+
+#################################################################################################################### MODELLO BLACK LITTERMAN 
+import numpy as np
+from numpy.linalg import inv
+import scipy.optimize
+import matplotlib.pyplot as plt
+import yfinance as yf
+from pandas import DataFrame
+
+# Define functions and classes
+def port_mean(W, R):
+    return np.sum(R * W)
+
+def port_var(W, C):
+    return np.dot(np.dot(W, C), W)
+
+def port_mean_var(W, R, C):
+    return port_mean(W, R), port_var(W, C)
+
+def solve_frontier(R, C, rf):
+    def fitness(W, R, C, r):
+        mean, var = port_mean_var(W, R, C)
+        penalty = 100 * abs(mean - r)
+        return var + penalty
+
+    frontier_mean, frontier_var, frontier_weights = [], [], []
+    n = len(R)
+    for r in np.linspace(min(R), max(R), num=20):
+        W = np.ones(n) / n
+        b_ = [(0, 1) for i in range(n)]
+        c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+        optimized = scipy.optimize.minimize(fitness, W, (R, C, r), method='SLSQP', constraints=c_, bounds=b_)
+        if not optimized.success:
+            raise BaseException(optimized.message)
+        frontier_mean.append(r)
+        frontier_var.append(port_var(optimized.x, C))
+        frontier_weights.append(optimized.x)
+    return np.array(frontier_mean), np.array(frontier_var), frontier_weights
+
+def solve_weights(R, C, rf):
+    def fitness(W, R, C, rf):
+        mean, var = port_mean_var(W, R, C)
+        util = (mean - rf) / np.sqrt(var)
+        return 1 / util
+
+    n = len(R)
+    W = np.ones(n) / n
+    b_ = [(0., 1.) for i in range(n)]
+    c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+    optimized = scipy.optimize.minimize(fitness, W, (R, C, rf), method='SLSQP', constraints=c_, bounds=b_)
+    if not optimized.success:
+        raise BaseException(optimized.message)
+    return optimized.x
+
+class Result:
+    def __init__(self, W, tan_mean, tan_var, front_mean, front_var, front_weights):
+        self.W = W
+        self.tan_mean = tan_mean
+        self.tan_var = tan_var
+        self.front_mean = front_mean
+        self.front_var = front_var
+        self.front_weights = front_weights
+
+def optimize_frontier(R, C, rf):
+    W = solve_weights(R, C, rf)
+    tan_mean, tan_var = port_mean_var(W, R, C)
+    front_mean, front_var, front_weights = solve_frontier(R, C, rf)
+    return Result(W, tan_mean, tan_var, front_mean, front_var, front_weights)
+
+def display_assets(names, R, C, color='black'):
+    plt.scatter([np.sqrt(C[i, i]) for i in range(len(names))], R, marker='x', color=color)
+    plt.grid(True)
+    for i in range(len(names)):
+        plt.text(np.sqrt(C[i, i]), R[i], '  %s' % names[i], verticalalignment='center', color=color)
+
+def display_frontier(result: Result, label=None, color='black'):
+    plt.text(np.sqrt(result.tan_var), result.tan_mean, '   tangent', verticalalignment='center', color=color)
+    plt.scatter(np.sqrt(result.tan_var), result.tan_mean, marker='o', color=color)
+    plt.plot(np.sqrt(result.front_var), result.front_mean, label=label, color=color)
+    plt.grid(True)
+
+def load_data():
+    # List of 100 major global stocks with market capitalizations (USD)
+    symbols = [
+        'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'UNH', 'DIS', 
+        'NVDA', 'HD', 'BAC', 'VZ', 'IBM', 'BRK-A', 'XOM', 'NSRGY', 'PFE', 'KO', 'PEP', 'NKE', 'TM', 'SAP', 'ORCL', 
+        'CSCO', 'T', 'VOD', 'INTC', 'QCOM', 'ASML', 'TXN', 'ADBE', 'CRM', 'MCD', 'ABT', 'MRK', 'NVS', 'GE', 'RY', 
+        'HSBC', 'BHP', 'BP', 'CVX', 'SNY', 'BMY', 'AMGN', 'ABBV', 'GILD', 'BA', 'DHR', 'MMM', 
+        'ACN', 'HON', 'UPS', 'UNP', 'RTX', 'CAT', 'DE', 'NEE', 'DUK', 'SO', 'AEP', 'EXC', 'SIEGY', 'BASFY', 'AIQUY', 
+       
+    ]
+
+    # Assigning estimated market capitalizations (from latest financial data, estimates might vary)
+    cap = {
+        'AAPL': 2100e9, 'MSFT': 1800e9, 'AMZN': 1100e9, 'GOOGL': 1500e9, 'META': 500e9, 'TSLA': 600e9, 'BABA': 250e9, 
+        'V': 450e9, 'JNJ': 400e9, 'WMT': 350e9, 'JPM': 400e9, 'MA': 300e9, 'PG': 350e9, 'UNH': 450e9, 'DIS': 200e9, 
+        'NVDA': 450e9, 'HD': 320e9, 'BAC': 280e9, 'VZ': 180e9, 'IBM': 120e9, 'BRK-A': 600e9, 'XOM': 350e9, 'NSRGY': 320e9, 
+        'PFE': 250e9, 'KO': 230e9, 'PEP': 210e9, 'NKE': 200e9, 'TM': 220e9, 'SAP': 150e9, 'ORCL': 200e9, 
+        'CSCO': 190e9, 'T': 150e9, 'VOD': 40e9, 'INTC': 120e9, 'QCOM': 160e9, 'ASML': 220e9, 'TXN': 160e9, 'ADBE': 180e9, 
+        'CRM': 170e9, 'MCD': 170e9, 'ABT': 200e9, 'MRK': 200e9, 'NVS': 220e9, 'GE': 100e9, 'RY': 130e9, 
+        'HSBC': 150e9, 'BHP': 170e9, 'BP': 90e9, 'CVX': 240e9, 'SNY': 120e9, 
+        'BMY': 140e9, 'AMGN': 130e9, 'ABBV': 260e9, 'GILD': 80e9, 'BA': 100e9, 'DHR': 160e9, 'MMM': 90e9, 
+        'ACN': 200e9, 'HON': 150e9, 'UPS': 130e9, 'UNP': 140e9, 'RTX': 120e9, 'CAT': 110e9, 'DE': 100e9, 'NEE': 140e9, 
+        'DUK': 70e9, 'SO': 70e9, 'AEP': 50e9, 'EXC': 40e9, 'SIEGY': 80e9, 'BASFY': 60e9, 'AIQUY': 40e9, 
+        
+    }
+    
+    end_date = pd.to_datetime('today')
+    start_date = end_date - pd.DateOffset(years=3)
+
+    prices_out, caps_out = [], []
+    for symbol in symbols:
+        data = yf.download(symbol, start=start_date, end=end_date)
+        if data.empty:
+            prices = [float('nan')] * 500
+        else:
+            prices = data['Adj Close'].tolist()
+
+        prices_out.append(prices)
+        caps_out.append(cap[symbol])
+
+    return symbols, prices_out, caps_out
+
+names, prices, caps = load_data()
+
+def assets_historical_returns_and_covariances(prices):
+    prices = np.matrix(prices)
+    rows, cols = prices.shape
+    returns = np.empty([rows, cols - 1])
+    for r in range(rows):
+        for c in range(cols - 1):
+            p0, p1 = prices[r, c], prices[r, c + 1]
+            returns[r, c] = (p1 / p0) - 1
+
+    expreturns = np.array([])
+    for r in range(rows):
+        expreturns = np.append(expreturns, np.mean(returns[r]))
+
+    expreturns = (1 + expreturns) ** 250 - 1  # Annualize returns
+    covars = np.cov(returns) * 250  # Annualize covariances
+    return expreturns, covars
+
+W = np.array(caps) / sum(caps)
+R, C = assets_historical_returns_and_covariances(prices)
+rf = 0.015  # Risk-free rate
+
+# Calculate portfolio historical return and variance
+mean, var = port_mean_var(W, R, C)
+lmb = (mean - rf) / var  # Calculate risk aversion
+Pi = np.dot(np.dot(lmb, C), W)  # Calculate equilibrium excess returns
+
+# Incorporating views
+def create_views_and_link_matrix(names, views):
+    r, c = len(views), len(names)
+    Q = [views[i][3] for i in range(r)]  # view matrix
+    P = np.zeros([r, c])
+    nameToIndex = {n: i for i, n in enumerate(names)}
+    for i, v in enumerate(views):
+        name1, name2 = views[i][0], views[i][2]
+        P[i, nameToIndex[name1]] = +1 if views[i][1] == '>' else -1
+        P[i, nameToIndex[name2]] = -1 if views[i][1] == '>' else +1
+    return np.array(Q), P
+
+views = [('MSFT', '>', 'GOOGL', 0.02), ('AAPL', '<', 'AMZN', 0.02),('META', '<', 'TSLA', 0.02)]
+       
+       
+Q, P = create_views_and_link_matrix(names, views)
+
+tau = .025  # scaling factor
+omega = np.dot(np.dot(tau, P), np.dot(C, P.T))  # Uncertainty matrix about views
+sub_a = inv(np.dot(tau, C))
+sub_b = np.dot(P.T, np.dot(inv(omega), P))
+sub_c = np.dot(inv(np.dot(tau, C)), Pi)
+sub_d = np.dot(P.T, np.dot(inv(omega), Q))
+Pi_adj = np.dot(inv(sub_a + sub_b), (sub_c + sub_d))
+
+res1 = optimize_frontier(R + rf, C, rf)
+res2 = optimize_frontier(Pi + rf, C, rf)
+res3 = optimize_frontier(Pi_adj + rf, C, rf)
+
+# Displaying results
+plt.figure(figsize=(14, 10))  # Set a larger figure size for clear visibility
+display_assets(names, R + rf, C, color='black')
+display_frontier(res1, label='Historical returns', color='black')
+display_assets(names, Pi + rf, C, color='orange')
+display_frontier(res2, label='Implied returns', color='orange')
+display_assets(names, Pi_adj + rf, C, color='magenta')
+display_frontier(res3, label='Implied returns (adjusted views)', color='magenta')
+plt.xlabel('variance $\sigma$')
+plt.ylabel('mean $\mu$')
+plt.legend()
+plt.show()
+
+# Printing results
+print("Historical Returns Portfolio Weights:")
+print(res1.W)
+print("Historical Returns Tangent Portfolio Mean:", res1.tan_mean)
+print("Historical Returns Tangent Portfolio Variance:", res1.tan_var)
+
+print("\nImplied Returns Portfolio Weights:")
+print(res2.W)
+print("Implied Returns Tangent Portfolio Mean:", res2.tan_mean)
+print("Implied Returns Tangent Portfolio Variance:", res2.tan_var)
+
+print("\nAdjusted Returns Portfolio Weights:")
+print(res3.W)
+print("Adjusted Returns Tangent Portfolio Mean:", res3.tan_mean)
+print("Adjusted Returns Tangent Portfolio Variance:", res3.tan_var)
+
+# Additional analysis
+plt.figure(figsize=(14, 10))
+plt.subplot(2, 2, 1)
+display_assets(names, R + rf, C, color='black')
+display_frontier(res1, label='Historical returns', color='black')
+plt.title('Historical Returns')
+
+plt.subplot(2, 2, 2)
+display_assets(names, Pi + rf, C, color='orange')
+display_frontier(res2, label='Implied returns', color='orange')
+plt.title('Implied Returns')
+
+plt.subplot(2, 2, 3)
+display_assets(names, Pi_adj + rf, C, color='magenta')
+display_frontier(res3, label='Adjusted returns', color='magenta')
+plt.title('Adjusted Returns')
+
+plt.subplot(2, 2, 4)
+plt.bar(names, res3.W, color='purple')
+plt.xlabel('Assets')
+plt.ylabel('Weights')
+plt.title('Adjusted Returns Portfolio Weights')
+
+plt.tight_layout()
+plt.show()
+
+# Risk-free rate
+rf = 0.015
+
+# Portfolio returns and risks after Black-Litterman implementation
+portfolio_return_after = port_mean(res3.W, R)
+portfolio_risk_after = np.sqrt(port_var(res3.W, C))
+
+# Calculate Sharpe Ratio
+sharpe_ratio = (portfolio_return_after - rf) / portfolio_risk_after
+print("Sharpe Ratio of the portfolio after Black-Litterman implementation:", sharpe_ratio)
+def equally_weighted_portfolio(R):
+    n = len(R)
+    W = np.ones(n) / n
+    return W
+
+# Calcola i pesi del portafoglio equally weighted
+W_eq = equally_weighted_portfolio(R)
+
+# Calcola il rendimento e la varianza del portafoglio equally weighted
+mean_eq, var_eq = port_mean_var(W_eq, R, C)
+
+# Displaying results
+plt.figure(figsize=(14, 10))  
+display_assets(names, R + rf, C, color='red')
+display_frontier(res1, label='Historical returns', color='red')
+display_assets(names, Pi + rf, C, color='green')
+display_frontier(res2, label='Implied returns', color='green')
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Implied returns (adjusted views)', color='blue')
+plt.scatter(np.sqrt(var_eq), mean_eq, color='orange', label='Equally weighted portfolio')
+plt.xlabel('variance $\sigma$')
+plt.ylabel('mean $\mu$')
+plt.legend()
+plt.show()
+
+# Calcola le misure di performance per il portafoglio equally weighted
+portfolio_return_eq = port_mean(W_eq, R)
+portfolio_risk_eq = np.sqrt(port_var(W_eq, C))
+sharpe_ratio_eq = (portfolio_return_eq - rf) / portfolio_risk_eq
+downside_returns_eq = [min(0, R[i] - rf) for i in range(len(R))]
+downside_risk_eq = np.std(downside_returns_eq)
+sortino_ratio_eq = (portfolio_return_eq - rf) / downside_risk_eq
+
+# Stampa le misure di performance per il portafoglio equally weighted
+print("Equally Weighted Portfolio Performance Measures:")
+print("Portfolio Expected Return:", portfolio_return_eq)
+print("Portfolio Standard Deviation:", portfolio_risk_eq)
+print("Sharpe Ratio:", sharpe_ratio_eq)
+print("Sortino Ratio:", sortino_ratio_eq)
+
+# Implementazione della strategia equally-weighted
+n_assets = len(names)
+W_equally_weighted = np.ones(n_assets) / n_assets
+
+# Calcolo delle performance per la strategia equally-weighted
+portfolio_return_equally_weighted = port_mean(W_equally_weighted, R)
+portfolio_risk_equally_weighted = np.sqrt(port_var(W_equally_weighted, C))
+sharpe_ratio_equally_weighted = (portfolio_return_equally_weighted - rf) / portfolio_risk_equally_weighted
+
+# Confronto delle performance
+print("Performance della strategia Black-Litterman:")
+print("Sharpe Ratio:", sharpe_ratio)
+print("\nPerformance della strategia Equally-Weighted:")
+print("Sharpe Ratio:", sharpe_ratio_equally_weighted)
+# Costi di transazione (bid-ask spread come percentuale del prezzo)
+bid_ask_spread_percent = 0.6
+
+# Aggiunta dei costi di transazione al calcolo della varianza del portafoglio
+def port_var_with_transaction_costs(W, C, bid_ask_spread_percent):
+    transaction_costs = np.dot(W, np.sqrt(np.diag(C))) * bid_ask_spread_percent
+    return port_var(W, C) + np.sum(transaction_costs)
+
+# Calcolo della varianza del portafoglio con i costi di transazione per le strategie
+portfolio_risk_after_transaction_costs = np.sqrt(port_var_with_transaction_costs(res3.W, C, bid_ask_spread_percent))
+portfolio_risk_equally_weighted_after_transaction_costs = np.sqrt(port_var_with_transaction_costs(W_equally_weighted, 
+                                                                                                  C, bid_ask_spread_percent))
+
+# Calcolo del Sharpe Ratio con i costi di transazione per le strategie
+sharpe_ratio_after_transaction_costs = (portfolio_return_after - rf) / portfolio_risk_after_transaction_costs
+sharpe_ratio_equally_weighted_after_transaction_costs = (portfolio_return_equally_weighted - rf) / 
+portfolio_risk_equally_weighted_after_transaction_costs
+
+# Confronto delle performance con i costi di transazione
+print("Performance della strategia Black-Litterman con costi di transazione:")
+print("Sharpe Ratio:", sharpe_ratio_after_transaction_costs)
+print("\nPerformance della strategia Equally-Weighted con costi di transazione:")
+print("Sharpe Ratio:", sharpe_ratio_equally_weighted_after_transaction_costs)
+# Grafico 1: Frontiera efficiente senza e con costi di transazione per la strategia Black-Litterman
+plt.figure(figsize=(10, 6))
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Implied returns (adjusted views)', color='blue')
+plt.title('Frontiera efficiente con costi di transazione (Black-Litterman)')
+plt.xlabel('Varianza $\sigma$')
+plt.ylabel('Rendimento medio $\mu$')
+plt.legend()
+plt.show()
+
+# Grafico 2: Frontiera efficiente senza e con costi di transazione per la strategia Equally-Weighted
+plt.figure(figsize=(10, 6))
+display_assets(names, W, C, color='black')
+display_frontier(res1, label='Historical returns', color='black')
+plt.title('Frontiera efficiente con costi di transazione (Equally-Weighted)')
+plt.xlabel('Varianza $\sigma$')
+plt.ylabel('Rendimento medio $\mu$')
+plt.legend()
+plt.show()
+
+# Grafico 3: Confronto dei rendimenti attesi dei portafogli ottimizzati con e senza costi di transazione
+plt.figure(figsize=(8, 6))
+plt.bar(['Black-Litterman', 'Equally-Weighted'],
+        [portfolio_return_after, portfolio_return_equally_weighted],
+        color=['blue', 'red'])
+plt.title('Confronto dei rendimenti attesi con costi di transazione')
+plt.ylabel('Rendimento atteso')
+plt.show()
+
+# Grafico 4: Confronto delle varianze dei portafogli ottimizzati con e senza costi di transazione
+plt.figure(figsize=(8, 6))
+plt.bar(['Black-Litterman', 'Equally-Weighted'],
+        [portfolio_risk_after_transaction_costs, portfolio_risk_equally_weighted_after_transaction_costs],
+        color=['blue', 'red'])
+plt.title('Confronto delle varianze con costi di transazione')
+plt.ylabel('Varianza del portafoglio')
+plt.show()
+import pandas as pd
+
+# Definiamo le misure di performance per entrambe le strategie
+performance_metrics = {
+    'Rendimento atteso': [portfolio_return_after, portfolio_return_equally_weighted],
+    'Varianza': [portfolio_risk_after_transaction_costs, portfolio_risk_equally_weighted_after_transaction_costs],
+    'Sharpe Ratio': [sharpe_ratio_after_transaction_costs, sharpe_ratio_equally_weighted_after_transaction_costs],
+    # Aggiungi altre misure di performance se necessario
+}
+
+# Creiamo il DataFrame Pandas
+df_performance = pd.DataFrame(performance_metrics, index=['Black-Litterman', 'Equally-Weighted'])
+
+# Visualizziamo il DataFrame
+print(df_performance)
+
+#################################################################################################################### OUT-OF-SAMPLE
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def fetch_data(tickers, start_date, end_date):
+    """
+    Fetches adjusted close prices for given tickers between start_date and end_date.
+    """
+    data = yf.download(tickers, start=start_date, end=end_date)
+    return data['Adj Close']
+
+def compute_returns(data):
+    """
+    Computes daily returns from price data.
+    """
+    return data.pct_change().dropna()
+
+def compute_covariance(returns):
+    """
+    Computes the covariance matrix of the returns.
+    """
+    return returns.cov()
+
+def black_litterman_out_of_sample(prior_returns, tau, P, Q, omega, sigma_in_sample, sigma_out_of_sample):
+    """
+    Returns the posterior returns based on the Black-Litterman Out-of-Sample model adjustments.
+    """
+    pi = tau * sigma_out_of_sample.dot(prior_returns)
+    M = P.T.dot(np.linalg.inv(omega)).dot(P) + np.linalg.inv(tau * sigma_in_sample)
+    C = P.T.dot(np.linalg.inv(omega)).dot(Q) + np.linalg.inv(tau * sigma_in_sample).dot(pi)
+    posterior_returns = np.linalg.inv(M).dot(C)
+    return posterior_returns
+
+def plot_returns(in_sample_returns, out_of_sample_returns, posterior_returns):
+    """
+    Plots in-sample, out-of-sample, and posterior returns.
+    """
+    plt.figure(figsize=(12, 8))
+    plt.plot(in_sample_returns.index, in_sample_returns, label='In-Sample Returns')
+    plt.plot(out_of_sample_returns.index, out_of_sample_returns, label='Out-of-Sample Returns')
+    plt.axhline(y=posterior_returns.mean(), color='r', linestyle='--', label='Posterior Mean Return')
+    plt.title('Returns Comparison')
+    plt.xlabel('Date')
+    plt.ylabel('Returns')
+    plt.legend()
+    plt.show()
+
+def compute_annualized_return(returns):
+    """
+    Computes the annualized return of the portfolio.
+    """
+    total_return = (1 + returns).prod() - 1
+    num_years = len(returns) / 252  # Assuming 252 trading days in a year
+    annualized_return = (1 + total_return) ** (1 / num_years) - 1
+    return annualized_return
+
+def compute_max_drawdown(returns):
+    """
+    Computes the maximum drawdown of the portfolio.
+    """
+    wealth_index = (1 + returns).cumprod()
+    previous_peaks = np.maximum.accumulate(wealth_index)
+    drawdowns = (wealth_index - previous_peaks) / previous_peaks
+    max_drawdown = drawdowns.min()
+    return max_drawdown
+
+def compute_performance_metrics(returns, risk_free_rate=0):
+    """
+    Computes performance metrics including return, Sharpe ratio, Sortino ratio, and Calmar ratio.
+    """
+    portfolio_return = compute_annualized_return(returns)
+    sharpe_ratio = compute_sharpe_ratio(returns, risk_free_rate)
+    sortino_ratio = compute_sortino_ratio(returns, risk_free_rate
+    return portfolio_return, sharpe_ratio, sortino_ratio, calmar_ratio
+
+def main():
+    tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'UNH', 'DIS', 
+        'NVDA', 'HD', 'BAC', 'VZ', 'IBM', 'BRK-A', 'XOM', 'NSRGY', 'PFE', 'KO', 'PEP', 'NKE', 'TM', 'SAP', 'ORCL', 
+        'CSCO', 'T', 'VOD', 'INTC', 'QCOM', 'ASML', 'TXN', 'ADBE', 'CRM', 'MCD', 'ABT', 'MRK', 'NVS', 'GE', 'RY', 
+        'HSBC', 'BHP', 'BP', 'CVX', 'SNY', 'BMY', 'AMGN', 'ABBV', 'GILD', 'BA', 'DHR', 'MMM', 
+        'ACN', 'HON', 'UPS']
+    
+    start_date = '2022-05-01'
+    split_date = '2023-05-01'
+    end_date = '2024-05-01'
+    tau = 0.05  # Scaling factor for the prior
+
+    prices = fetch_data(tickers, start_date, end_date)
+
+    # Compute returns
+    returns = compute_returns(prices)
+
+    # Split data into in-sample and out-of-sample by a date
+    in_sample_returns = returns[:split_date]
+    out_of_sample_returns = returns[split_date:]
+
+    # Compute covariance matrices
+    sigma_in_sample = compute_covariance(in_sample_returns)
+    sigma_out_of_sample = compute_covariance(out_of_sample_returns)
+
+    # Example: Investor's views and confidence
+    P = np.array([[1, -1, 0, 0, 0, 0,1,-1,0,1,0,0,0,-1,1,0,-1,-1,0,1,1,1,0,1,-1,-1,0,
+                   0,1,0,1,-1,-1,-1,0,1,1,0,-1,1,-1,1,1,0,-1,0,-1,0,0,-1,-1,1,-1,1,0,-1,0,0,-1,1]])  # View: AAPL will outperform MSFT
+    Q = np.array([0.05])  # Expected excess return of 5%
+    omega = np.array([[0.1]])  # Confidence in the view
+
+    # Prior returns (annualized mean returns)
+    prior_returns = in_sample_returns.mean() * 252
+
+    # Apply Black-Litterman Out-of-Sample model to adjust prior returns
+    posterior_returns = black_litterman_out_of_sample(prior_returns, tau, P, Q, omega, sigma_in_sample, sigma_out_of_sample)
+
+    # Compute performance metrics before and after Black-Litterman
+    in_sample_performance = compute_performance_metrics(in_sample_returns.mean(axis=1))
+    out_of_sample_performance = compute_performance_metrics(out_of_sample_returns.mean(axis=1))
+    posterior_performance = compute_performance_metrics(posterior_returns)
+
+    # Print performance metrics
+    print("In-Sample Performance Metrics:")
+    print("Return:", in_sample_performance[0])
+    print("Sharpe Ratio:", in_sample_performance[1])
+    print("Sortino Ratio:", in_sample_performance[2])
+    print("\nOut-of-Sample Performance Metrics:")
+    print("Return:", out_of_sample_performance[0])
+    print("Sharpe Ratio:", out_of_sample_performance[1])
+    print("Sortino Ratio:", out_of_sample_performance[2]
+    print("\nPosterior Performance Metrics:")
+    print("Return:", posterior_performance[0])
+    print("Sharpe Ratio:", posterior_performance[1])
+    print("Sortino Ratio:", posterior_performance[2])
+    # Print maximum drawdown
+    print("\nMaximum Drawdown:")
+    print("In-Sample Maximum Drawdown:", compute_max_drawdown(in_sample_returns.mean(axis=1)))
+    print("Out-of-Sample Maximum Drawdown:", compute_max_drawdown(out_of_sample_returns.mean(axis=1)))
+    print("Posterior Maximum Drawdown:", compute_max_drawdown(posterior_returns))
+
+    # Plotting the data
+    plot_returns(in_sample_returns.mean(axis=1), out_of_sample_returns.mean(axis=1), posterior_returns)
+
+if __name__ == "__main__":
+    main()
+import pandas as pd
+import numpy as np
+import yfinance as yf
+
+def fetch_data(tickers, start_date, end_date):
+    """Scarica i dati di prezzo per i ticker specificati."""
+    data = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
+    return data.dropna()
+
+def calculate_daily_returns(data):
+    """Calcola i rendimenti giornalieri degli asset."""
+    return data.pct_change().dropna()
+
+def equally_weighted_returns(returns, weights):
+    """Calcola i rendimenti del portafoglio dato i rendimenti e i pesi degli asset."""
+    return returns.dot(weights)
+
+def apply_transaction_costs(returns, transaction_cost):
+    """Applica i costi di transazione ai rendimenti del portafoglio."""
+    return returns - transaction_cost
+
+def sharpe_ratio(returns, risk_free_rate):
+    """Calcola il Sharpe Ratio annuale per i rendimenti del portafoglio."""
+    mean_return = returns.mean() * 252
+    std_dev = returns.std() * np.sqrt(252)
+    return (mean_return - risk_free_rate) / std_dev
+
+# Lista estesa di ticker
+tickers = [
+    'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT', 'JPM', 'MA',
+    'PG', 'UNH', 'DIS', 'NVDA', 'HD', 'BAC', 'VZ', 'IBM', 'BRK-A', 'XOM', 'NSRGY', 'PFE', 'KO',
+    'PEP', 'NKE', 'TM', 'SAP', 'ORCL', 'CSCO', 'T', 'VOD', 'INTC', 'QCOM', 'ASML', 'TXN',
+    'ADBE', 'CRM', 'MCD', 'ABT', 'MRK', 'NVS', 'GE', 'RY', 'HSBC', 'BHP', 'BP', 'CVX', 'SNY',
+    'BMY', 'AMGN', 'ABBV', 'GILD', 'BA', 'DHR', 'MMM', 'ACN', 'HON', 'UPS'
+]
+
+# Scaricare i dati storici e pulire
+data = fetch_data(tickers, "2022-01-01", "2024-01-01")
+
+# Suddividere i dati in set in-sample e out-of-sample
+split_date = '2023-01-01'
+data_in_sample = data[:split_date]
+data_out_of_sample = data[split_date:]
+
+# Calcolare i rendimenti giornalieri per entrambi i set
+returns_in_sample = calculate_daily_returns(data_in_sample)
+returns_out_of_sample = calculate_daily_returns(data_out_of_sample)
+
+# Strategia Equally Weighted 1/N
+n_assets = len(tickers)
+weights = np.ones(n_assets) / n_assets
+
+# Calcolare i rendimenti del portafoglio out-of-sample e in-sample
+portfolio_returns_in = equally_weighted_returns(returns_in_sample, weights)
+portfolio_returns_out = equally_weighted_returns(returns_out_of_sample, weights)
+
+# Applicare i costi di transazione (es. 0.1% per ogni riequilibrio)
+transaction_cost = 0.001
+portfolio_returns_in = apply_transaction_costs(portfolio_returns_in, transaction_cost)
+portfolio_returns_out = apply_transaction_costs(portfolio_returns_out, transaction_cost)
+
+# Calcolare i rendimenti cumulativi per visualizzazione
+cumulative_returns_in = (1 + portfolio_returns_in).cumprod() - 1
+cumulative_returns_out = (1 + portfolio_returns_out).cumprod() - 1
+
+# Tasso privo di rischio annuo ipotetico
+risk_free_rate = 0.1
+
+# Calcolo del Sharpe Ratio annuale in-sample e out-of-sample
+sharpe_ratio_in = sharpe_ratio(portfolio_returns_in, risk_free_rate)
+sharpe_ratio_out = sharpe_ratio(portfolio_returns_out, risk_free_rate)
+
+print("Sharpe Ratio In-Sample:", sharpe_ratio_in)
+print("Sharpe Ratio Out-of-Sample:", sharpe_ratio_out)
+
+##################################################################################################################### FAMA FRENCH 5 FACTORS
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+import pandas_datareader.data as web
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+
+# Assicurati che il background sia bianco
+plt.rcParams['figure.facecolor'] = 'white'
+plt.rcParams['axes.facecolor'] = 'white'
+
+def fetch_stock_data(symbols, start_date, end_date):
+    """Fetches stock price data from Yahoo Finance."""
+    stock_data = yf.download(symbols, start=start_date, end=end_date)['Adj Close']
+    return stock_data.pct_change().dropna()
+
+def load_fama_french_factors():
+    """Loads Fama-French 5-factor model data directly from the web."""
+    ff_factors = web.DataReader('F-F_Research_Data_5_Factors_2x3_daily', 'famafrench')[0]
+    ff_factors /= 100  # Convert to decimal format
+    ff_factors['RF'] = ff_factors['RF'].fillna(method='ffill')
+    return ff_factors
+
+def fit_fama_french(stock_returns, ff_factors):
+    """Fits the Fama-French model and predicts returns."""
+    predicted_returns = pd.DataFrame(index=stock_returns.index)
+    for ticker in stock_returns.columns:
+        formula = f'{ticker} ~ Mkt_RF + SMB + HML + RMW + CMA'
+        data = pd.concat([stock_returns[ticker], ff_factors], axis=1).dropna()
+        data.columns = ['Returns', 'Mkt_RF', 'SMB', 'HML', 'RMW', 'CMA', 'RF']
+        data['Excess_Returns'] = data['Returns'] - data['RF']
+        model = smf.ols(formula='Excess_Returns ~ Mkt_RF + SMB + HML + RMW + CMA', data=data).fit()
+        data['Predicted'] = model.predict(data[['Mkt_RF', 'SMB', 'HML', 'RMW', 'CMA']])
+        predicted_returns[ticker] = data['Predicted'] + data['RF']  # Add back the risk-free rate
+    return predicted_returns
+
+def simulate_rebalancing(returns, initial_weights, transaction_cost):
+    """Simulates portfolio returns considering rebalancing and transaction costs."""
+    weights = initial_weights.copy()
+    cum_returns = [1]
+    for i in range(1, len(returns)):
+        # Rebalance: simulate transaction costs
+        weights *= (1 - transaction_cost)
+        weights /= np.sum(weights)  # Normalize after cost deduction
+        daily_return = np.sum(returns.iloc[i] * weights)
+        cum_returns.append(cum_returns[-1] * (1 + daily_return))
+    return np.array(cum_returns)
+
+# Configuration
+symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'UNH', 'DIS', 
+        'NVDA', 'HD', 'BAC', 'VZ', 'IBM', 'BRK-A', 'XOM', 'NSRGY', 'PFE', 'KO', 'PEP', 'NKE', 'TM', 'SAP', 'ORCL', 
+        'CSCO', 'T', 'VOD', 'INTC', 'QCOM', 'ASML', 'TXN', 'ADBE', 'CRM', 'MCD', 'ABT', 'MRK', 'NVS', 'GE', 'RY', 
+        'HSBC', 'BHP', 'BP', 'CVX', 'SNY', 'BMY', 'AMGN', 'ABBV', 'GILD', 'BA', 'DHR', 'MMM', 
+        'ACN', 'HON', 'UPS', 'UNP', 'RTX', 'CAT', 'DE', 'NEE', 'DUK', 'SO', 'AEP', 'EXC', 'SIEGY', 'BASFY', 'AIQUY', 
+       ]
+start_date = '2021-01-01'
+end_date = '2024-04-25'
+transaction_cost = 0.1  # 0.1% per trade
+
+# Load data
+stock_returns = fetch_stock_data(symbols, start_date, end_date)
+ff_factors = load_fama_french_factors()
+
+# Fit the Fama-French model and predict returns
+predicted_returns = fit_fama_french(stock_returns, ff_factors)
+
+# Calculate equally weighted portfolio returns considering transaction costs
+equal_weights = np.ones(len(symbols)) / len(symbols)
+ew_cum_returns = simulate_rebalancing(stock_returns, equal_weights, transaction_cost)
+
+# Calculate Fama-French weighted portfolio returns considering transaction costs
+ff_weights = equal_weights  # Assuming equal weights for simplicity, can be optimized
+ff_cum_returns = simulate_rebalancing(predicted_returns, ff_weights, transaction_cost)
+
+# Plotting the cumulative returns
+plt.figure(figsize=(12, 8))
+plt.plot(ew_cum_returns, label='Equally Weighted Portfolio', color='red')
+plt.plot(ff_cum_returns, label='Fama-French Model Portfolio', color='green')
+plt.title('Comparison of Portfolio Strategies with Transaction Costs')
+plt.xlabel('Date')
+plt.ylabel('Cumulative Returns')
+plt.legend()
+plt.grid(True)
+plt.show()
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+import statsmodels.formula.api as smf
+import pandas_datareader.data as web
+
+def fetch_stock_data(symbols, start_date, end_date):
+    """Fetches stock price data from Yahoo Finance."""
+    stock_data = yf.download(symbols, start=start_date, end=end_date)['Adj Close']
+    return stock_data.pct_change().dropna()
+
+def load_fama_french_factors():
+    """Loads Fama-French 5-factor model data directly from the web."""
+    ff_factors = web.DataReader('F-F_Research_Data_5_Factors_2x3_daily', 'famafrench')[0]
+    ff_factors /= 100  # Convert to decimal format
+    ff_factors['RF'] = ff_factors['RF'].fillna(method='ffill')
+    return ff_factors
+
+def fit_fama_french(stock_returns, ff_factors):
+    """Fits the Fama-French three-factor model to the stock returns using statsmodels.formula.api."""
+    results = {}
+    for ticker in stock_returns.columns:
+        formula = f'{ticker} ~ Mkt_RF + SMB + HML + RMW + CMA'
+        data = pd.concat([stock_returns[ticker], ff_factors], axis=1).dropna()
+        data.columns = ['Returns', 'Mkt_RF', 'SMB', 'HML', 'RMW', 'CMA', 'RF']
+        data['Excess_Returns'] = data['Returns'] - data['RF']
+        model = smf.ols(formula='Excess_Returns ~ Mkt_RF + SMB + HML + RMW + CMA', data=data).fit()
+        results[ticker] = model
+    return results
+
+# Configuration
+symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA']  # Example set of stocks
+start_date = '2015-01-01'
+end_date = '2020-12-31'
+
+# Load data
+stock_returns = fetch_stock_data(symbols, start_date, end_date)
+ff_factors = load_fama_french_factors()
+
+# Fit the Fama-French model
+model_results = fit_fama_french(stock_returns, ff_factors)
+
+# Display model summaries
+for ticker, result in model_results.items():
+    print(f'Results for {ticker}:')
+    print(result.summary())
+    print('\n')
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def calculate_log_returns(cum_returns):
+    """Calculate log returns from cumulative returns."""
+    return np.log(cum_returns[1:] / cum_returns[:-1])
+
+# Assume ew_cum_returns and ff_cum_returns are already computed from simulate_rebalancing
+ew_returns = np.diff(ew_cum_returns) / ew_cum_returns[:-1]  # simple returns
+ff_returns = np.diff(ff_cum_returns) / ff_cum_returns[:-1]  # simple returns
+
+ew_log_returns = calculate_log_returns(ew_cum_returns)
+ff_log_returns = calculate_log_returns(ff_cum_returns)
+def annualized_metric(returns):
+    """ Calculate annualized return and volatility. """
+    annualized_return = np.mean(returns) * 252
+    annualized_vol = np.std(returns) * np.sqrt(252)
+    return annualized_return, annualized_vol
+
+def sharpe_ratio(returns, risk_free_rate=0.02):
+    """ Calculate the Sharpe ratio for the given returns. """
+    ann_return, ann_vol = annualized_metric(returns)
+    return (ann_return - risk_free_rate) / ann_vol
+
+def max_drawdown(cumulative_returns):
+    """ Calculate the maximum drawdown from cumulative returns. """
+    roll_max = np.maximum.accumulate(cumulative_returns)
+    drawdown = (cumulative_returns - roll_max) / roll_max
+    return drawdown.min()
+
+# Calculate performance metrics
+ew_ann_return, ew_ann_vol = annualized_metric(ew_returns)
+ff_ann_return, ff_ann_vol = annualized_metric(ff_returns)
+ew_sharpe = sharpe_ratio(ew_returns)
+ff_sharpe = sharpe_ratio(ff_returns)
+ew_mdd = max_drawdown(ew_cum_returns)
+ff_mdd = max_drawdown(ff_cum_returns)
+
+print(f"Equally Weighted - Annual Return: {ew_ann_return:.4f}, Volatility: {ew_ann_vol:.4f}, Sharpe: {ew_sharpe:.4f}, MDD: {ew_mdd:.4f}")
+print(f"Fama-French - Annual Return: {ff_ann_return:.4f}, Volatility: {ff_ann_vol:.4f}, Sharpe: {ff_sharpe:.4f}, MDD: {ff_mdd:.4f}")
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Assuming ew_returns and ff_returns are initially numpy arrays and have a corresponding index
+# We need a date range for these returns:
+dates = pd.date_range(start=start_date, end=end_date, freq='B')[:len(ew_returns)]  # Adjust as necessary
+
+# Convert numpy arrays to pandas Series
+ew_returns_series = pd.Series(ew_returns, index=dates)
+ff_returns_series = pd.Series(ff_returns, index=dates)
+
+# Calculate the rolling Sharpe ratio using pandas rolling method
+rolling_sharpe_ew = ew_returns_series.rolling(window=252).apply(lambda x: sharpe_ratio(x), raw=True).dropna()
+rolling_sharpe_ff = ff_returns_series.rolling(window=252).apply(lambda x: sharpe_ratio(x), raw=True).dropna()
+
+# Continue with other calculations
+# Define the Sharpe ratio function if not already defined
+def sharpe_ratio(returns, risk_free_rate=0.02):
+    """ Calculate the Sharpe ratio for the given returns. """
+    mean_return = returns.mean()
+    std_return = returns.std()
+    return (mean_return - risk_free_rate) / std_return if std_return != 0 else 0
+
+# Example of plotting if needed:
+plt.figure(figsize=(12, 6))
+plt.plot(rolling_sharpe_ew, label='Equally Weighted Sharpe Ratio', color='red')
+plt.plot(rolling_sharpe_ff, label='Fama-French Sharpe Ratio', color='green')
+plt.title('Rolling Sharpe Ratio (252-day window)')
+plt.xlabel('Date')
+plt.ylabel('Sharpe Ratio')
+plt.legend()
+plt.grid(True)
+plt.show()
+import numpy as np
+import pandas as pd
+
+# Assuming the functions to calculate performance metrics are already defined
+# Here are basic implementations in case they're not defined yet:
+def annualized_return(returns):
+    """ Calculate the annualized return from daily returns. """
+    compounded_return = (1 + returns).cumprod()[-1]
+    n_periods = len(returns)
+    return (compounded_return ** (252 / n_periods)) - 1
+
+def annualized_volatility(returns):
+    """ Calculate the annualized volatility from daily returns. """
+    return returns.std() * np.sqrt(252)
+
+def sharpe_ratio(returns, risk_free_rate=0.02):
+    """ Calculate the Sharpe ratio. """
+    ann_return = annualized_return(returns)
+    ann_vol = annualized_volatility(returns)
+    return (ann_return - risk_free_rate) / ann_vol if ann_vol != 0 else np.nan
+
+def max_drawdown(cumulative_returns):
+    """ Calculate maximum drawdown. """
+    peak = cumulative_returns.cummax()
+    drawdown = (cumulative_returns - peak) / peak
+    return drawdown.min()
+
+# Compute metrics
+ew_annual_return = annualized_return(ew_returns_series)
+ff_annual_return = annualized_return(ff_returns_series)
+ew_annual_volatility = annualized_volatility(ew_returns_series)
+ff_annual_volatility = annualized_volatility(ff_returns_series)
+ew_sharpe = sharpe_ratio(ew_returns_series)
+ff_sharpe = sharpe_ratio(ff_returns_series)
+
+ew_cum_returns = (1 + ew_returns_series).cumprod()
+ff_cum_returns = (1 + ff_returns_series).cumprod()
+
+ew_mdd = max_drawdown(ew_cum_returns)
+ff_mdd = max_drawdown(ff_cum_returns)
+
+# Printing results
+print("Performance Metrics:")
+print(f"Equally Weighted Portfolio: Annualized Return = {ew_annual_return:.2%}")
+print(f"Equally Weighted Portfolio: Annualized Volatility = {ew_annual_volatility:.2%}")
+print(f"Equally Weighted Portfolio: Sharpe Ratio = {ew_sharpe:.2f}")
+print(f"Equally Weighted Portfolio: Maximum Drawdown = {ew_mdd:.2%}")
+
+print(f"Fama-French Portfolio: Annualized Return = {ff_annual_return:.2%}")
+print(f"Fama-French Portfolio: Annualized Volatility = {ff_annual_volatility:.2%}")
+print(f"Fama-French Portfolio: Sharpe Ratio = {ff_sharpe:.2f}")
+print(f"Fama-French Portfolio: Maximum Drawdown = {ff_mdd:.2%}")
+
+# Optionally, print rolling Sharpe ratios if needed for the latest available date
+print("\nLatest Rolling Sharpe Ratios:")
+print(f"Equally Weighted Portfolio: {rolling_sharpe_ew.iloc[-1]:.2f}")
+print(f"Fama-French Portfolio: {rolling_sharpe_ff.iloc[-1]:.2f}")
+import matplotlib.pyplot as plt
+
+# Plotting Maximum Drawdowns
+plt.figure(figsize=(14, 7))
+plt.plot(ew_cum_returns.cummax() - ew_cum_returns, label='Equally Weighted Portfolio Drawdown', color='red', linewidth=2)
+plt.plot(ff_cum_returns.cummax() - ff_cum_returns, label='Fama-French Portfolio Drawdown', color='green', linewidth=2)
+plt.title('Maximum Drawdown Comparison')
+plt.xlabel('Date')
+plt.ylabel('Drawdown')
+plt.legend()
+plt.grid(True)
+plt.show()
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+import yfinance as yf
+assets = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META']  # Esempio di asset
+data = yf.download(assets, start='2015-01-01', end='2023-01-01')['Adj Close']
+returns = np.log(data / data.shift(1)).dropna()
+def sharpe_ratio(weights, returns, risk_free_rate=0.01):
+    """ Calcola il Sharpe ratio di un portafoglio dato."""
+    port_returns = np.dot(returns.mean(), weights) * 252
+    port_volatility = np.sqrt(np.dot(weights.T, np.dot(returns.cov() * 252, weights)))
+    return -(port_returns - risk_free_rate) / port_volatility  # Negativo per la minimizzazione
+
+def transaction_costs(weights, prev_weights, cost_rate=0.001):
+    """ Calcola i costi di transazione basati sui cambiamenti di peso."""
+    return cost_rate * np.sum(np.abs(weights - prev_weights))
+
+def objective_function(weights, returns, prev_weights, risk_free_rate=0.01, cost_rate=0.001):
+    """ Funzione obiettivo che combina Sharpe ratio e costi di transazione."""
+    return (sharpe_ratio(weights, returns, risk_free_rate) + 
+            transaction_costs(weights, prev_weights, cost_rate))
+
+def optimize_portfolio(returns, initial_weights, risk_free_rate=0.01, cost_rate=0.001):
+    """ Trova i pesi ottimali del portafoglio che massimizzano il Sharpe ratio, considerando i costi di transazione."""
+    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})  # I pesi devono sommare a 1
+    bounds = tuple((0, 1) for _ in range(len(assets)))
+    result = minimize(objective_function, initial_weights, args=(returns, initial_weights, risk_free_rate, cost_rate),
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+    return result
+# Inizializzazione dei pesi (può partire da 1/n se non ci sono pesi precedenti)
+initial_weights = np.array([1. / len(assets)] * len(assets))
+result = optimize_portfolio(returns, initial_weights)
+optimal_weights = result.x
+print("Pesi ottimali:", optimal_weights)
+
+
+def sharpe_ratio(weights, returns, risk_free_rate=0.01):
+    """ Calcola il Sharpe ratio di un portafoglio dato."""
+    port_returns = np.dot(returns.mean(), weights) * 252  # Rendimenti annualizzati
+    port_volatility = np.sqrt(np.dot(weights.T, np.dot(returns.cov() * 252, weights)))  # Volatilità annualizzata
+    return (port_returns - risk_free_rate) / port_volatility  # Rapporto Sharpe
+# Calcolo del rapporto Sharpe per entrambe le strategie
+sharpe_optimized = sharpe_ratio(optimal_weights, returns)
+sharpe_equal = sharpe_ratio(initial_weights, returns)
+
+print(f"Rapporto Sharpe Portafoglio Ottimizzato: {sharpe_optimized}")
+print(f"Rapporto Sharpe Portafoglio 1/n: {sharpe_equal}")
+
+#################################################################################################################### OUT-OF-SAMPLE prova1
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def fetch_data(tickers, start_date, end_date):
+    """
+    Fetches adjusted close prices for given tickers between start_date and end_date.
+    """
+    data = yf.download(tickers, start=start_date, end=end_date)
+    return data['Adj Close']
+
+def compute_returns(data):
+    """
+    Computes daily returns from price data.
+    """
+    return data.pct_change().dropna()
+
+def compute_covariance(returns):
+    """
+    Computes the covariance matrix of the returns.
+    """
+    return returns.cov()
+
+def black_litterman_adjustment(prior_returns, tau, P, Q, omega, sigma):
+    """
+    Returns the posterior returns based on the Black-Litterman model adjustments.
+    """
+    pi = tau * sigma.dot(prior_returns)
+    M = P.T.dot(np.linalg.inv(omega)).dot(P) + np.linalg.inv(tau * sigma)
+    C = P.T.dot(np.linalg.inv(omega)).dot(Q) + np.linalg.inv(tau * sigma).dot(pi)
+    posterior_returns = np.linalg.inv(M).dot(C)
+    return posterior_returns
+
+def plot_data(in_sample_returns, out_of_sample_returns, posterior_returns):
+    """
+    Plots in-sample and out-of-sample returns along with posterior returns.
+    """
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.plot(in_sample_returns.index, in_sample_returns.mean(axis=1), label='In-Sample Mean Return')
+    ax.plot(out_of_sample_returns.index, out_of_sample_returns.mean(axis=1), label='Out-of-Sample Mean Return')
+    ax.axhline(y=posterior_returns.mean(), color='r', linestyle='-', label='Posterior Mean Return')
+    ax.set_title('Returns Comparison')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Returns')
+    ax.legend()
+    plt.show()
+
+def print_results(in_sample_returns, out_of_sample_returns, posterior_returns):
+    """
+    Prints mean returns for in-sample, out-of-sample, and posterior returns.
+    """
+    print("In-Sample Mean Annualized Return: {:.2%}".format(in_sample_returns.mean(axis=0).mean() * 252))
+    print("Out-of-Sample Mean Annualized Return: {:.2%}".format(out_of_sample_returns.mean(axis=0).mean() * 252))
+    print("Posterior Mean Annualized Return: {:.2%}".format(posterior_returns.mean()))
+
+def main():
+    tickers = ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA', 'NFLX']
+    start_date = '2019-01-01'
+    end_date = '2030-01-01'
+    tau = 0.05  # Scaling factor for the prior
+
+    prices = fetch_data(tickers, start_date, end_date)
+
+    # Compute returns
+    returns = compute_returns(prices)
+
+    # Split data into in-sample and out-of-sample by a date
+    split_date = '2020-01-01'
+    in_sample_returns = returns[:split_date]
+    out_of_sample_returns = returns[split_date:]
+
+    # Compute covariance matrices
+    in_sample_cov = compute_covariance(in_sample_returns)
+
+    # Example: Investor's views and confidence
+    P = np.array([[1, -1, 0, 0, 0, 0]])  # View: AAPL will outperform MSFT
+    Q = np.array([0.05])  # Expected excess return of 5%
+    omega = np.array([[0.1]])  # Confidence in the view
+
+    # Prior returns (annualized mean returns)
+    prior_returns = in_sample_returns.mean() * 252
+
+    # Apply Black-Litterman model to adjust prior returns
+    posterior_returns = black_litterman_adjustment(prior_returns, tau, P, Q, omega, in_sample_cov)
+
+    # Print results
+    print_results(in_sample_returns, out_of_sample_returns, posterior_returns)
+
+    # Plotting the data
+    plot_data(in_sample_returns, out_of_sample_returns, posterior_returns)
+
+if __name__ == "__main__":
+    main()
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.optimize import minimize
+
+# Placeholder for expected market returns (you should replace these with your own data)
+tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT', 
+           'JPM', 'MA', 'PG', 'UNH', 'DIS', 'NVDA', 'HD', 'BAC', 'VZ', 'IBM', 'BRK-A', 
+           'XOM', 'NSRGY', 'PFE', 'KO', 'PEP', 'NKE', 'TM', 'SAP', 'ORCL', 'CSCO', 'T', 
+           'VOD', 'INTC', 'QCOM', 'ASML', 'TXN', 'ADBE', 'CRM', 'MCD', 'ABT', 'MRK', 'NVS', 
+           'GE', 'RY', 'HSBC', 'BHP', 'BP', 'CVX', 'SNY', 'BMY', 'AMGN', 'ABBV', 'GILD', 
+           'BA', 'DHR', 'MMM', 'ACN', 'HON', 'UPS', 'UNP', 'RTX', 'CAT', 'DE', 'NEE', 'DUK', 
+           'SO', 'AEP', 'EXC', 'SIEGY', 'BASFY', 'AIQUY']
+market_returns = np.random.randn(len(tickers)) * 0.05  # Random market returns
+
+# Placeholder for covariance matrix (you should use actual market data)
+covariance_matrix = np.random.randn(len(tickers), len(tickers))
+covariance_matrix = covariance_matrix @ covariance_matrix.T  # To make it positive definite
+
+# Investor views and confidence
+P = np.eye(len(tickers))  # Example: identity matrix means views on each stock individually
+Q = 0.01 * np.random.randn(len(tickers))  # Random views of similar magnitude to market returns
+
+# Risk aversion coefficient (example value, adjust based on your scenario)
+delta = 2.5
+
+# Calculating the Black-Litterman expected returns
+tau = 0.05  # Uncertainty in the prior
+inv = np.linalg.inv
+pi = market_returns
+Omega = np.diag(np.diag(P @ (tau * covariance_matrix) @ P.T))  # Uncertainty in views
+bl_returns = inv(inv(tau * covariance_matrix) + P.T @ inv(Omega) @ P) @ (inv(tau * covariance_matrix) @ pi + P.T @ inv(Omega) @ Q)
+
+# Portfolio optimization to find the minimum variance portfolio
+def portfolio_variance(weights, cov_matrix):
+    return weights.T @ cov_matrix @ weights
+
+initial_weights = np.ones(len(tickers)) / len(tickers)
+constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})  # Sum of weights must be 1
+bounds = tuple((0, 1) for _ in range(len(tickers)))
+
+opt_result = minimize(portfolio_variance, initial_weights, args=(covariance_matrix,), method='SLSQP', bounds=bounds, constraints=constraints)
+optimal_weights = opt_result.x
+
+# Visualizing the results
+# Portfolio Weights Graph
+plt.figure(figsize=(10, 8))
+plt.bar(tickers, optimal_weights)
+plt.xlabel('Stocks')
+plt.ylabel('Portfolio Weights')
+plt.title('Portfolio Weights by the Black-Litterman Model')
+plt.xticks(rotation=90)
+plt.show()
+
+# Covariance Matrix Heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(pd.DataFrame(covariance_matrix, index=tickers, columns=tickers), cmap='coolwarm')
+plt.title('Covariance Matrix Heatmap')
+plt.show()
+
+################################################################################################################## BL MODEL
+
+import numpy as np
+import pandas as pd
+import scipy.optimize as sco
+np.random.seed(42)  
+n_assets = 20
+n_obs = 289
+
+returns = np.random.normal(loc=0.01, scale=0.05, size=(n_obs, n_assets))
+dates = pd.date_range('1995-01', periods=n_obs, freq='M')
+assets = ['S&P500 Sector ' + str(i+1) if i < 10 else 'FTSE Europe Sector ' + str(i-9) if i < 15 else
+          'FTSE Canada Sector ' + str(i-14) if i < 17 else 'FTSE Japan Sector ' + str(i-16) for i in range(n_assets)]
+returns_df = pd.DataFrame(returns, index=dates, columns=assets)
+cov_matrix = returns_df.cov()
+risk_free_rate = 0.02 / 12  
+P = np.array([[1, -1] + [0]*(n_assets-2)])  # 
+Q = np.array([0.01])  
+
+tau = 0.05
+Omega = tau * (np.dot(np.dot(P, cov_matrix), P.T))  
+inverse = np.linalg.inv(Omega) 
+
+adjustment = np.dot(np.dot(inverse, (Q - np.dot(P, pi))), np.dot(P, cov_matrix))
+new_returns = pi + adjustment.flatten()
+
+def neg_sharpe_ratio(weights):
+    portfolio_returns = np.dot(weights, new_returns)
+    portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    return -(portfolio_returns - risk_free_rate) / portfolio_volatility
+
+transaction_cost = 0.01  
+
+def apply_transaction_costs(returns, weights, transaction_cost):
+    monthly_transaction_costs = np.full(returns.shape[0], transaction_cost)
+    
+    net_returns = returns - (returns * monthly_transaction_costs)
+    
+    return net_return
+    
+transaction_cost = 0.01  
+
+cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1}) 
+bounds = tuple((0, 1) for asset in range(n_assets))
+initial_guess = [1. / n_assets] * n_assets
+optimal_weights = sco.minimize(neg_sharpe_ratio, initial_guess, method='SLSQP', bounds=bounds, constraints=cons)
+
+optimal_portfolio = pd.Series(optimal_weights.x, index=assets)
+print(optimal_portfolio)
+
+descriptive_stats = returns_df.describe()
+
+print(descriptive_stats)
+import numpy as np
+import pandas as pd
+
+n_assets = 20
+n_obs = 289
+
+np.random.seed(42)
+returns = np.random.normal(loc=0.01, scale=0.05, size=(n_obs, n_assets))
+dates = pd.date_range(start="1995-01", periods=n_obs, freq='M')
+assets = ['Asset {}'.format(i+1) for i in range(n_assets)]
+returns_df = pd.DataFrame(returns, index=dates, columns=assets)
+
+cov_matrix = returns_df.cov()
+market_prior = returns_df.mean()
+
+# Risk-free rate
+risk_free_rate = 0.02 / 12  # monthly rate
+
+# Investor views
+P = np.eye(n_assets)  
+Q = market_prior.values + 0.01 
+
+tau = 0.05
+Omega = np.diag(np.full(n_assets, 0.05))  
+
+pi = market_prior.values
+inverse = np.linalg.inv(np.linalg.inv(tau * cov_matrix) + np.dot(P.T, np.linalg.inv(Omega)).dot(P))
+mu_bl = np.dot(inverse, np.dot(np.linalg.inv(tau * cov_matrix), pi) + np.dot(P.T, np.linalg.inv(Omega)).dot(Q))
+
+volatilities = np.sqrt(np.diag(cov_matrix))
+rp_weights = 1 / volatilities
+rp_weights /= rp_weights.sum() 
+
+bl_rp_weights = mu_bl * rp_weights
+bl_rp_weights /= bl_rp_weights.sum()  
+
+mu_bl, rp_weights, bl_rp_weights
+risk_aversion = 2  
+
+portfolio_returns = returns_df.dot(bl_rp_weights)
+
+mean_return = portfolio_returns.mean()
+std_deviation = portfolio_returns.std()
+annualized_return = (1 + mean_return)**12 - 1  
+annualized_std = std_deviation * np.sqrt(12)  
+sharpe_ratio = (annualized_return - risk_free_rate) / annualized_std
+cer = annualized_return - 0.5 * risk_aversion * (annualized_std ** 2)
+
+cumulative_returns = (1 + portfolio_returns).cumprod()
+rolling_max = cumulative_returns.cummax()
+drawdown = (cumulative_returns - rolling_max) / rolling_max
+max_drawdown = drawdown.min()
+
+mean_return, sharpe_ratio, cer, max_drawdown
+
+naive_weights = np.ones(n_assets) / n_assets
+
+portfolio_returns_naive = returns_df.dot(naive_weights)
+
+mean_return_naive = portfolio_returns_naive.mean()
+std_deviation_naive = portfolio_returns_naive.std()
+annualized_return_naive = (1 + mean_return_naive)**12 - 1  
+annualized_std_naive = std_deviation_naive * np.sqrt(12)  
+sharpe_ratio_naive = (annualized_return_naive - risk_free_rate) / annualized_std_naive
+
+mean_return_naive, sharpe_ratio_naive
+smv_views = market_prior  
+
+smv_weights = np.dot(np.linalg.inv(cov_matrix), smv_views)
+smv_weights = np.maximum(smv_weights, 0)  
+smv_weights /= smv_weights.sum() 
+
+
+portfolio_returns_bl_smv_l = returns_df.dot(smv_weights)
+
+cumulative_returns_bl_smv_l = (1 + portfolio_returns_bl_smv_l).cumprod()
+rolling_max_bl_smv_l = cumulative_returns_bl_smv_l.cummax()
+drawdown_bl_smv_l = (cumulative_returns_bl_smv_l - rolling_max_bl_smv_l) / rolling_max_bl_smv_l
+
+
+portfolio_returns_naive = returns_df.dot(naive_weights)
+cumulative_returns_naive = (1 + portfolio_returns_naive).cumprod()
+rolling_max_naive = cumulative_returns_naive.cummax()
+drawdown_naive = (cumulative_returns_naive - rolling_max_naive) / rolling_max_naive
+
+
+fig, ax = plt.subplots(2, 1, figsize=(12, 10))
+
+
+ax[0].plot(cumulative_returns_bl_smv_l, label='BL-SMV-l', color='blue')
+ax[0].plot(cumulative_returns_naive, label='Naive 1/N', color='green')
+ax[0].set_title('Cumulative Returns Comparison')
+ax[0].set_xlabel('Date')
+ax[0].set_ylabel('Cumulative Returns')
+ax[0].legend()
+
+
+ax[1].plot(drawdown_bl_smv_l, label='BL-SMV-l', color='blue')
+ax[1].plot(drawdown_naive, label='Naive 1/N', color='green')
+ax[1].set_title('Drawdown Comparison')
+ax[1].set_xlabel('Date')
+ax[1].set_ylabel('Drawdown')
+ax[1].legend()
+
+plt.tight_layout()
+plt.show()
+
+# Function to calculate the negative Sharpe ratio, incorporating transaction costs
+def neg_sharpe_ratio_with_costs(weights, new_returns, cov_matrix, risk_free_rate, transaction_cost):
+    # Calculate portfolio returns
+    portfolio_returns = np.dot(weights, new_returns)
+    
+    # Deduct transaction costs - assuming full portfolio rebalance for simplicity
+    portfolio_returns -= transaction_cost
+    
+    # Calculate portfolio volatility
+    portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    
+    # Return the negative Sharpe Ratio (since we're minimizing)
+    return -(portfolio_returns - risk_free_rate) / portfolio_volatility
+
+# Transaction cost set at 1% of the trade
+transaction_cost = 0.01
+
+# Optimization process
+optimal_weights_with_costs = sco.minimize(
+    neg_sharpe_ratio_with_costs,  # Function to minimize
+    initial_guess,                # Initial guess
+    args=(new_returns, cov_matrix, risk_free_rate, transaction_cost),  # Additional arguments for the function
+    method='SLSQP',               # Optimization method
+    bounds=bounds,                # Bounds for variables
+    constraints=cons              # Constraints definition
+)
+
+# Obtain the optimal portfolio considering transaction costs
+optimal_portfolio_with_costs = pd.Series(optimal_weights_with_costs.x, index=assets)
+
+print(optimal_portfolio_with_costs)
+
+# Define the necessary functions and variables again for clarity
+import numpy as np
+import pandas as pd
+import scipy.optimize as sco
+
+# Generate random returns as before
+np.random.seed(42)  # For reproducible results
+n_assets = 20
+n_obs = 289
+returns = np.random.normal(loc=0.01, scale=0.05, size=(n_obs, n_assets))
+dates = pd.date_range('1995-01', periods=n_obs, freq='M')
+returns_df = pd.DataFrame(returns, index=dates)
+cov_matrix = returns_df.cov()
+
+# Prior returns (mean returns for each asset)
+pi = returns_df.mean()
+
+# Define views
+P = np.eye(n_assets)  # Absolute views
+Q = np.full((n_assets,), 0.01)  # All assets outperform risk-free rate by 1% monthly
+tau = 0.05
+Omega = np.diag(np.diag(P @ cov_matrix @ P.T) * tau)  # Uncertainty in views
+
+# Black-Litterman formula
+inv_Omega = np.linalg.inv(Omega)
+inv_cov = np.linalg.inv(cov_matrix)
+M = inv_cov + P.T @ inv_Omega @ P
+adjusted_returns = np.linalg.solve(M, inv_cov @ pi.values + P.T @ inv_Omega @ Q)
+
+# Define the objective function for optimization (negated Sharpe ratio)
+def neg_sharpe_ratio(weights, returns, cov_matrix, risk_free_rate):
+    portfolio_returns = np.dot(weights, returns)
+    portfolio_volatility = np.sqrt(weights.T @ cov_matrix @ weights)
+    return -(portfolio_returns - risk_free_rate) / portfolio_volatility
+
+# Constraints and bounds
+constraints = [{'type': 'eq', 'fun': lambda x: np.sum(x) - 1}]
+bounds = [(0, 1)] * n_assets
+risk_free_rate = 0.02 / 12  # Monthly risk-free rate
+initial_weights = np.array([1 / n_assets] * n_assets)
+
+# Optimization without transaction costs
+result = sco.minimize(neg_sharpe_ratio, initial_weights, args=(adjusted_returns, cov_matrix, risk_free_rate),
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+
+# Calculate transaction costs
+def transaction_costs(initial_weights, optimal_weights, rate=0.001):
+    return np.sum(np.abs(optimal_weights - initial_weights)) * rate
+
+optimal_weights = result.x
+costs = transaction_costs(initial_weights, optimal_weights)
+
+# Effective Sharpe ratio considering transaction costs
+portfolio_returns = np.dot(optimal_weights, adjusted_returns) - costs
+portfolio_volatility = np.sqrt(optimal_weights.T @ cov_matrix @ optimal_weights)
+effective_sharpe_ratio = (portfolio_returns - risk_free_rate) / portfolio_volatility
+
+result.success, effective_sharpe_ratio, costs
+
+import matplotlib.pyplot as plt
+
+# Asset labels (assuming a simple label from Asset 1 to Asset 20)
+asset_labels = [f'Asset {i+1}' for i in range(n_assets)]
+
+# Create bar plot for portfolio weights
+plt.figure(figsize=(14, 7))
+plt.bar(asset_labels, optimal_weights, color='blue')
+plt.xlabel('Assets')
+plt.ylabel('Weights')
+plt.title('Optimal Portfolio Weights After Optimization')
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.show()
+
+################################################################################################################## EQUALLY WEIGHTED
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Impostazioni estetiche per seaborn
+sns.set(style='whitegrid')
+
+# Definizione dei simboli dei titoli azionari e ETF
+symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BRK-B', 'JNJ', 'V', 'PG',
+           'NVDA', 'HD', 'UNH', 'DIS', 'VZ', 'PYPL', 'ADBE', 'CMCSA', 'NFLX', 'KO',
+           'BABA', 'PFE', 'CSCO', 'INTC', 'ORCL', 'PEP', 'QCOM', 'IBM', 'MRK', 'ABBV',
+           'BAC', 'WFC', 'C', 'GILD', 'F', 'GM', 'GE', 'DAL', 'AAL', 'LUV',
+          ]
+
+# Scaricamento dei dati
+data = yf.download(symbols, start="2020-01-01", end="2024-01-01")['Adj Close']
+
+# Calcolo dei rendimenti giornalieri
+returns = data.pct_change().dropna()
+
+# Implementazione della strategia Equally Weighted
+equal_weights = np.array([1/len(symbols)] * len(symbols))
+portfolio_returns_eq = returns.dot(equal_weights)
+
+# Recupero delle capitalizzazioni di mercato per la strategia Value Weighted
+market_caps = {}
+for symbol in symbols:
+    try:
+        market_cap = yf.Ticker(symbol).info['marketCap']
+        if market_cap is not None:
+            market_caps[symbol] = market_cap
+    except KeyError:
+        print(f"Market cap not available for {symbol}")
+
+total_market_cap = sum(market_caps.values())
+value_weights = np.array([market_caps.get(symbol, 0) / total_market_cap for symbol in symbols])
+portfolio_returns_val = returns.dot(value_weights)
+
+# Plot dei rendimenti cumulativi
+cumulative_returns_eq = (1 + portfolio_returns_eq).cumprod()
+cumulative_returns_val = (1 + portfolio_returns_val).cumprod()
+
+plt.figure(figsize=(12, 8))
+plt.plot(cumulative_returns_eq, label='Equally Weighted', linewidth=2, color='red')
+plt.plot(cumulative_returns_val, label='Value Weighted', linewidth=2, color='green')
+plt.title('Confronto dei Rendimenti Cumulativi dei Portafogli', fontsize=16)
+plt.xlabel('Data', fontsize=14)
+plt.ylabel('Rendimento Cumulativo', fontsize=14)
+plt.legend(fontsize=12)
+plt.xticks(fontsize=12, rotation=45)
+plt.yticks(fontsize=12)
+plt.tight_layout()
+plt.show()
+
+# Calcolo delle metriche di performance
+vol_eq = portfolio_returns_eq.std() * np.sqrt(252)
+vol_val = portfolio_returns_val.std() * np.sqrt(252)
+sharpe_eq = portfolio_returns_eq.mean() / vol_eq
+sharpe_val = portfolio_returns_val.mean() / vol_val
+
+print(f'Volatilità Equally Weighted: {vol_eq:.4f}')
+print(f'Volatilità Value Weighted: {vol_val:.4f}')
+print(f'Rapporto di Sharpe Equally Weighted: {sharpe_eq:.4f}')
+print(f'Rapporto di Sharpe Value Weighted: {sharpe_val:.4f}')
+# Calcolo dei rendimenti annuali
+annual_returns_eq = returns.dot(equal_weights).resample('Y').apply(lambda x: (1 + x).prod() - 1)
+annual_returns_val = returns.dot(value_weights).resample('Y').apply(lambda x: (1 + x).prod() - 1)
+
+# Plot dei rendimenti annuali
+plt.figure(figsize=(14, 7))
+plt.bar(annual_returns_eq.index.year, annual_returns_eq, color='blue', label='Equally Weighted', alpha=0.6, width=0.4)
+plt.bar(annual_returns_val.index.year + 0.4, annual_returns_val, color='green', label='Value Weighted', alpha=0.6, width=0.4)
+plt.title('Rendimento Annuale dei Portafogli', fontsize=16)
+plt.xlabel('Anno', fontsize=14)
+plt.ylabel('Rendimento Annuale', fontsize=14)
+plt.legend(fontsize=12)
+plt.xticks(fontsize=12, rotation=45)
+plt.yticks(fontsize=12)
+plt.tight_layout()
+plt.show()
+plt.figure(figsize=(12, 6))
+plt.fill_between(cumulative_returns_eq.index, cumulative_returns_eq, color="skyblue", alpha=0.4, label='Equally Weighted')
+plt.fill_between(cumulative_returns_val.index, cumulative_returns_val, color="lightgreen", alpha=0.5, label='Value Weighted')
+plt.title('Rendimento Cumulativo dei Portafogli (Area)', fontsize=16)
+plt.xlabel('Data', fontsize=14)
+plt.ylabel('Rendimento Cumulativo', fontsize=14)
+plt.legend(fontsize=12)
+plt.xticks(fontsize=12, rotation=45)
+plt.yticks(fontsize=12)
+plt.tight_layout()
+plt.show()
+# Calcolo della matrice di correlazione
+correlation_matrix = returns.corr()
+
+# Creazione del grafico di calore
+plt.figure(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=False, cmap='coolwarm', linewidths=0.1)
+plt.title('Correlazione tra i Rendimenti dei Titoli', fontsize=16)
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.fill_between(cumulative_returns_eq.index, cumulative_returns_eq, color="navy", alpha=0.5, 
+                 label='Equally Weighted')
+plt.fill_between(cumulative_returns_val.index, cumulative_returns_val, color="red", alpha=0.5,
+                 label='Value Weighted')
+plt.title('Rendimento Cumulativo dei Portafogli (Area)', fontsize=16)
+plt.xlabel('Data', fontsize=14)
+plt.ylabel('Rendimento Cumulativo', fontsize=14)
+plt.legend(fontsize=12)
+plt.xticks(fontsize=12, rotation=45)
+plt.yticks(fontsize=12)
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(10, 6))
+
+# Colori più distintivi e linea più spessa
+plt.plot(rolling_vol_eq.index, rolling_vol_eq, label='Volatilità Equally Weighted', 
+         color='deepskyblue', linewidth=3, alpha=0.8)
+plt.plot(rolling_vol_val.index, rolling_vol_val, label='Volatilità Value Weighted', 
+         color='darkorange', linewidth=3, alpha=0.8)
+
+# Aggiunta di una legenda più chiara
+plt.legend(title='Legenda', title_fontsize='13', fontsize=12)
+
+# Titolo e etichette
+plt.title('Volatilità Mobile Annuale dei Portafogli', fontsize=18, fontweight='bold')
+plt.xlabel('Data', fontsize=16)
+plt.ylabel('Volatilità', fontsize=16)
+
+# Ottimizzazione dei ticks e loro rotazione
+plt.xticks(fontsize=14, rotation=45)
+plt.yticks(fontsize=14)
+
+# Miglioramento della griglia per una lettura più facile
+plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+
+# Aumentare i margini del plot per una migliore visualizzazione
+plt.margins(x=0.01)
+
+# Funzione per mostrare il grafico in modo pulito
+plt.tight_layout()
+
+# Mostra il grafico
+plt.show()
+
+################################################################################################################## BL POCHI ASSET
+
+import numpy as np
+from numpy.linalg import inv
+import scipy.optimize
+import matplotlib.pyplot as plt
+import yfinance as yf
+from pandas import DataFrame
+
+# Define functions and classes
+def port_mean(W, R):
+    return np.sum(R * W)
+
+def port_var(W, C):
+    return np.dot(np.dot(W, C), W)
+
+def port_mean_var(W, R, C):
+    return port_mean(W, R), port_var(W, C)
+
+def solve_frontier(R, C, rf):
+    def fitness(W, R, C, r):
+        mean, var = port_mean_var(W, R, C)
+        penalty = 100 * abs(mean - r)
+        return var + penalty
+
+    frontier_mean, frontier_var, frontier_weights = [], [], []
+    n = len(R)
+    for r in np.linspace(min(R), max(R), num=20):
+        W = np.ones(n) / n
+        b_ = [(0, 1) for i in range(n)]
+        c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+        optimized = scipy.optimize.minimize(fitness, W, (R, C, r), method='SLSQP', constraints=c_, bounds=b_)
+        if not optimized.success:
+            raise BaseException(optimized.message)
+        frontier_mean.append(r)
+        frontier_var.append(port_var(optimized.x, C))
+        frontier_weights.append(optimized.x)
+    return np.array(frontier_mean), np.array(frontier_var), frontier_weights
+
+def solve_weights(R, C, rf):
+    def fitness(W, R, C, rf):
+        mean, var = port_mean_var(W, R, C)
+        util = (mean - rf) / np.sqrt(var)
+        return 1 / util
+
+    n = len(R)
+    W = np.ones(n) / n
+    b_ = [(0., 1.) for i in range(n)]
+    c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+    optimized = scipy.optimize.minimize(fitness, W, (R, C, rf), method='SLSQP', constraints=c_, bounds=b_)
+    if not optimized.success:
+        raise BaseException(optimized.message)
+    return optimized.x
+
+class Result:
+    def __init__(self, W, tan_mean, tan_var, front_mean, front_var, front_weights):
+        self.W = W
+        self.tan_mean = tan_mean
+        self.tan_var = tan_var
+        self.front_mean = front_mean
+        self.front_var = front_var
+        self.front_weights = front_weights
+
+def optimize_frontier(R, C, rf):
+    W = solve_weights(R, C, rf)
+    tan_mean, tan_var = port_mean_var(W, R, C)
+    front_mean, front_var, front_weights = solve_frontier(R, C, rf)
+    return Result(W, tan_mean, tan_var, front_mean, front_var, front_weights)
+
+def display_assets(names, R, C, color='black'):
+    plt.scatter([np.sqrt(C[i, i]) for i in range(len(names))], R, marker='x', color=color)
+    plt.grid(True)
+    for i in range(len(names)):
+        plt.text(np.sqrt(C[i, i]), R[i], '  %s' % names[i], verticalalignment='center', color=color)
+
+def display_frontier(result: Result, label=None, color='black'):
+    plt.text(np.sqrt(result.tan_var), result.tan_mean, '   tangent', verticalalignment='center', color=color)
+    plt.scatter(np.sqrt(result.tan_var), result.tan_mean, marker='o', color=color)
+    plt.plot(np.sqrt(result.front_var), result.front_mean, label=label, color=color)
+    plt.grid(True)
+
+# Load data from Yahoo Finance
+def load_data():
+    symbols = ['XOM', 'AAPL', 'MSFT', 'JNJ', 'GE', 'GOOG', 'CVX', 'PG', 'WFC']
+    cap = {'XOM': 403.02e9, 'AAPL': 392.90e9, 'MSFT': 283.60e9, 'JNJ': 243.17e9,
+           'GE': 236.79e9, 'GOOG': 292.72e9, 'CVX': 231.03e9, 'PG': 214.99e9, 'WFC': 218.79e9}
+
+    end_date = pd.to_datetime('2013-07-01')
+    start_date = end_date - pd.DateOffset(days=500)
+
+    prices_out, caps_out = [], []
+    for symbol in symbols:
+        data = yf.download(symbol, start=start_date, end=end_date)
+        if data.empty:
+            prices = [float('nan')] * 500
+        else:
+            prices = data['Adj Close'].tolist()
+
+        prices_out.append(prices)
+        caps_out.append(cap[symbol])
+
+    return symbols, prices_out, caps_out
+
+names, prices, caps = load_data()
+
+def assets_historical_returns_and_covariances(prices):
+    prices = np.matrix(prices)
+    rows, cols = prices.shape
+    returns = np.empty([rows, cols - 1])
+    for r in range(rows):
+        for c in range(cols - 1):
+            p0, p1 = prices[r, c], prices[r, c + 1]
+            returns[r, c] = (p1 / p0) - 1
+
+    expreturns = np.array([])
+    for r in range(rows):
+        expreturns = np.append(expreturns, np.mean(returns[r]))
+
+    expreturns = (1 + expreturns) ** 250 - 1  # Annualize returns
+    covars = np.cov(returns) * 250  # Annualize covariances
+    return expreturns, covars
+
+W = np.array(caps) / sum(caps)
+R, C = assets_historical_returns_and_covariances(prices)
+rf = 0.015
+
+# Calculate portfolio historical return and variance
+mean, var = port_mean_var(W, R, C)
+lmb = (mean - rf) / var  # Calculate risk aversion
+Pi = np.dot(np.dot(lmb, C), W)  # Calculate equilibrium excess returns
+
+print("Historical Returns:", R)
+print("Implied Returns:", Pi)
+
+# Incorporating views
+def create_views_and_link_matrix(names, views):
+    r, c = len(views), len(names)
+    Q = [views[i][3] for i in range(r)]  # view matrix
+    P = np.zeros([r, c])
+    nameToIndex = {n: i for i, n in enumerate(names)}
+    for i, v in enumerate(views):
+        name1, name2 = views[i][0], views[i][2]
+        P[i, nameToIndex[name1]] = +1 if views[i][1] == '>' else -1
+        P[i, nameToIndex[name2]] = -1 if views[i][1] == '>' else +1
+    return np.array(Q), P
+
+views = [('MSFT', '>', 'GE', 0.02), ('AAPL', '<', 'JNJ', 0.02)]
+Q, P = create_views_and_link_matrix(names, views)
+
+tau = .025  # scaling factor
+omega = np.dot(np.dot(tau, P), np.dot(C, P.T))  # Uncertainty matrix about views
+sub_a = inv(np.dot(tau, C))
+sub_b = np.dot(P.T, np.dot(inv(omega), P))
+sub_c = np.dot(inv(np.dot(tau, C)), Pi)
+sub_d = np.dot(P.T, np.dot(inv(omega), Q))
+Pi_adj = np.dot(inv(sub_a + sub_b), (sub_c + sub_d))
+
+print("New Implied Returns (adjusted views):", Pi_adj)
+
+import matplotlib.pyplot as plt
+
+# Function to plot assets and the efficient frontier with the tangent point
+def display_assets_and_frontier(names, R, C, result: Result, title, color):
+    plt.figure(figsize=(10, 6))
+    plt.scatter([np.sqrt(C[i, i]) for i in range(len(names))], R, marker='x', color=color, label='Assets')
+    for i in range(len(names)):
+        plt.text(np.sqrt(C[i, i]), R[i], ' %s' % names[i], verticalalignment='center', color=color)
+    
+    # Plot the efficient frontier
+    plt.plot(np.sqrt(result.front_var), result.front_mean, label='Efficient Frontier', color=color)
+    # Highlight the tangent point
+    plt.scatter(np.sqrt(result.tan_var), result.tan_mean, color=color, marker='o', s=100, edgecolors='black', label='Tangent Point')
+    plt.text(np.sqrt(result.tan_var), result.tan_mean, ' tangent', verticalalignment='center', color=color)
+    
+    plt.title(title)
+    plt.xlabel('Variance $\sigma$')
+    plt.ylabel('Mean $\mu$')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+# Assuming `names`, `R`, `C`, `rf`, `res1`, `res2`, and `res3` are defined as in previous parts of your code
+
+# Display historical returns with tangent
+display_assets_and_frontier(names, R + rf, C, res1, 'Efficient Frontier with Historical Returns', 'red')
+
+# Display implied returns with tangent
+display_assets_and_frontier(names, Pi + rf, C, res2, 'Efficient Frontier with Implied Returns', 'green')
+
+# Display implied returns adjusted for views with tangent
+display_assets_and_frontier(names, Pi_adj + rf, C, res3, 'Efficient Frontier with Adjusted Implied Returns', 'blue')
+
+import numpy as np
+from numpy.linalg import inv
+import scipy.optimize
+import matplotlib.pyplot as plt
+import yfinance as yf
+from pandas import DataFrame
+
+# Define functions and classes
+def port_mean(W, R):
+    return np.sum(R * W)
+
+def port_var(W, C):
+    return np.dot(np.dot(W, C), W)
+
+def port_mean_var(W, R, C):
+    return port_mean(W, R), port_var(W, C)
+
+def solve_frontier(R, C, rf):
+    def fitness(W, R, C, r):
+        mean, var = port_mean_var(W, R, C)
+        penalty = 100 * abs(mean - r)
+        return var + penalty
+
+    frontier_mean, frontier_var, frontier_weights = [], [], []
+    n = len(R)
+    for r in np.linspace(min(R), max(R), num=20):
+        W = np.ones(n) / n
+        b_ = [(0, 1) for i in range(n)]
+        c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+        optimized = scipy.optimize.minimize(fitness, W, (R, C, r), method='SLSQP', constraints=c_, bounds=b_)
+        if not optimized.success:
+            raise BaseException(optimized.message)
+        frontier_mean.append(r)
+        frontier_var.append(port_var(optimized.x, C))
+        frontier_weights.append(optimized.x)
+    return np.array(frontier_mean), np.array(frontier_var), frontier_weights
+
+def solve_weights(R, C, rf):
+    def fitness(W, R, C, rf):
+        mean, var = port_mean_var(W, R, C)
+        util = (mean - rf) / np.sqrt(var)
+        return 1 / util
+
+    n = len(R)
+    W = np.ones(n) / n
+    b_ = [(0., 1.) for i in range(n)]
+    c_ = ({'type': 'eq', 'fun': lambda W: sum(W) - 1})
+    optimized = scipy.optimize.minimize(fitness, W, (R, C, rf), method='SLSQP', constraints=c_, bounds=b_)
+    if not optimized.success:
+        raise BaseException(optimized.message)
+    return optimized.x
+
+class Result:
+    def __init__(self, W, tan_mean, tan_var, front_mean, front_var, front_weights):
+        self.W = W
+        self.tan_mean = tan_mean
+        self.tan_var = tan_var
+        self.front_mean = front_mean
+        self.front_var = front_var
+        self.front_weights = front_weights
+
+def optimize_frontier(R, C, rf):
+    W = solve_weights(R, C, rf)
+    tan_mean, tan_var = port_mean_var(W, R, C)
+    front_mean, front_var, front_weights = solve_frontier(R, C, rf)
+    return Result(W, tan_mean, tan_var, front_mean, front_var, front_weights)
+
+def display_assets(names, R, C, color='black'):
+    plt.scatter([np.sqrt(C[i, i]) for i in range(len(names))], R, marker='x', color=color)
+    plt.grid(True)
+    for i in range(len(names)):
+        plt.text(np.sqrt(C[i, i]), R[i], '  %s' % names[i], verticalalignment='center', color=color)
+
+def display_frontier(result: Result, label=None, color='black'):
+    plt.text(np.sqrt(result.tan_var), result.tan_mean, '   tangent', verticalalignment='center', color=color)
+    plt.scatter(np.sqrt(result.tan_var), result.tan_mean, marker='o', color=color)
+    plt.plot(np.sqrt(result.front_var), result.front_mean, label=label, color=color)
+    plt.grid(True)
+
+# Load data from Yahoo Finance
+def load_data():
+    symbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'BRK-A', 'JNJ', 'JPM', 'TSLA', 'XOM', 'NSRGY']
+    cap = {'AAPL': 2100e9, 'AMZN': 1700e9, 'GOOGL': 1500e9, 'MSFT': 1800e9, 'BRK-A': 600e9,
+           'JNJ': 400e9, 'JPM': 470e9, 'TSLA': 800e9, 'XOM': 350e9, 'NSRGY': 320e9}
+
+    end_date = pd.to_datetime('today')
+    start_date = end_date - pd.DateOffset(years=3)
+
+    prices_out, caps_out = [], []
+    for symbol in symbols:
+        data = yf.download(symbol, start=start_date, end=end_date)
+        if data.empty:
+            prices = [float('nan')] * 500
+        else:
+            prices = data['Adj Close'].tolist()
+
+        prices_out.append(prices)
+        caps_out.append(cap[symbol])
+
+    return symbols, prices_out, caps_out
+
+names, prices, caps = load_data()
+
+def assets_historical_returns_and_covariances(prices):
+    prices = np.matrix(prices)
+    rows, cols = prices.shape
+    returns = np.empty([rows, cols - 1])
+    for r in range(rows):
+        for c in range(cols - 1):
+            p0, p1 = prices[r, c], prices[r, c + 1]
+            returns[r, c] = (p1 / p0) - 1
+
+    expreturns = np.array([])
+    for r in range(rows):
+        expreturns = np.append(expreturns, np.mean(returns[r]))
+
+    expreturns = (1 + expreturns) ** 250 - 1  # Annualize returns
+    covars = np.cov(returns) * 250  # Annualize covariances
+    return expreturns, covars
+
+W = np.array(caps) / sum(caps)
+R, C = assets_historical_returns_and_covariances(prices)
+rf = 0.015  # Risk-free rate
+
+# Calculate portfolio historical return and variance
+mean, var = port_mean_var(W, R, C)
+lmb = (mean - rf) / var  # Calculate risk aversion
+Pi = np.dot(np.dot(lmb, C), W)  # Calculate equilibrium excess returns
+
+# Incorporating views
+def create_views_and_link_matrix(names, views):
+    r, c = len(views), len(names)
+    Q = [views[i][3] for i in range(r)]  # view matrix
+    P = np.zeros([r, c])
+    nameToIndex = {n: i for i, n in enumerate(names)}
+    for i, v in enumerate(views):
+        name1, name2 = views[i][0], views[i][2]
+        P[i, nameToIndex[name1]] = +1 if views[i][1] == '>' else -1
+        P[i, nameToIndex[name2]] = -1 if views[i][1] == '>' else +1
+    return np.array(Q), P
+
+views = [('MSFT', '>', 'GOOGL', 0.02), ('AAPL', '<', 'AMZN', 0.02)]
+Q, P = create_views_and_link_matrix(names, views)
+
+tau = .025  # scaling factor
+omega = np.dot(np.dot(tau, P), np.dot(C, P.T))  # Uncertainty matrix about views
+sub_a = inv(np.dot(tau, C))
+sub_b = np.dot(P.T, np.dot(inv(omega), P))
+sub_c = np.dot(inv(np.dot(tau, C)), Pi)
+sub_d = np.dot(P.T, np.dot(inv(omega), Q))
+Pi_adj = np.dot(inv(sub_a + sub_b), (sub_c + sub_d))
+
+res1 = optimize_frontier(R + rf, C, rf)
+res2 = optimize_frontier(Pi + rf, C, rf)
+res3 = optimize_frontier(Pi_adj + rf, C, rf)
+
+# Displaying results
+plt.figure(figsize=(14, 10))  # Set a larger figure size for clear visibility
+display_assets(names, R + rf, C, color='red')
+display_frontier(res1, label='Historical returns', color='red')
+display_assets(names, Pi + rf, C, color='green')
+display_frontier(res2, label='Implied returns', color='green')
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Implied returns (adjusted views)', color='blue')
+plt.xlabel('variance $\sigma$')
+plt.ylabel('mean $\mu$')
+plt.legend()
+plt.show()
+# Printing results
+print("Historical Returns Portfolio Weights:")
+print(res1.W)
+print("Historical Returns Tangent Portfolio Mean:", res1.tan_mean)
+print("Historical Returns Tangent Portfolio Variance:", res1.tan_var)
+
+print("\nImplied Returns Portfolio Weights:")
+print(res2.W)
+print("Implied Returns Tangent Portfolio Mean:", res2.tan_mean)
+print("Implied Returns Tangent Portfolio Variance:", res2.tan_var)
+
+print("\nAdjusted Returns Portfolio Weights:")
+print(res3.W)
+print("Adjusted Returns Tangent Portfolio Mean:", res3.tan_mean)
+print("Adjusted Returns Tangent Portfolio Variance:", res3.tan_var)
+
+# Additional analysis
+plt.figure(figsize=(14, 10))
+plt.subplot(2, 2, 1)
+display_assets(names, R + rf, C, color='red')
+display_frontier(res1, label='Historical returns', color='red')
+plt.title('Historical Returns')
+
+plt.subplot(2, 2, 2)
+display_assets(names, Pi + rf, C, color='green')
+display_frontier(res2, label='Implied returns', color='green')
+plt.title('Implied Returns')
+
+plt.subplot(2, 2, 3)
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Adjusted returns', color='blue')
+plt.title('Adjusted Returns')
+
+plt.subplot(2, 2, 4)
+plt.bar(names, res3.W, color='purple')
+plt.xlabel('Assets')
+plt.ylabel('Weights')
+plt.title('Adjusted Returns Portfolio Weights')
+
+plt.tight_layout()
+plt.show()
+
+# Portfolio Weights Distribution
+plt.figure(figsize=(10, 6))
+front_weights_array = np.array(res3.front_weights)
+for i in range(len(names)):
+    plt.hist(front_weights_array[:, i], bins=20, alpha=0.5, label=names[i])
+plt.xlabel('Portfolio Weight')
+plt.ylabel('Frequency')
+plt.title('Portfolio Weights Distribution')
+plt.legend()
+plt.grid(True)
+plt.show()
+# Risk-free rate
+rf = 0.015
+
+# Portfolio returns and risks after Black-Litterman implementation
+portfolio_return_after = port_mean(res3.W, R)
+portfolio_risk_after = np.sqrt(port_var(res3.W, C))
+
+# Calculate Sharpe Ratio
+sharpe_ratio = (portfolio_return_after - rf) / portfolio_risk_after
+print("Sharpe Ratio of the portfolio after Black-Litterman implementation:", sharpe_ratio)
+# Calculate beta
+market_returns = market_returns = [0.05, 0.03, 0.06, 0.02, 0.04]  # Esempio di rendimento del mercato
+market_returns += [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15]  # Aggiungi ulteriori valori
+# Ridimensiona il numero di valori di mercato per farli corrispondere alla lunghezza del portafoglio
+market_returns = market_returns[:len(portfolio_returns)]
+
+# Calcola la covarianza e la varianza
+covariance_portfolio_market = np.cov(portfolio_returns, market_returns)[0][1]
+variance_market = np.var(market_returns)
+
+# Calcola il beta
+beta = covariance_portfolio_market / variance_market
+
+covariance_portfolio_market = np.cov(portfolio_returns, market_returns)[0][1]
+variance_market = np.var(market_returns)
+beta = covariance_portfolio_market / variance_market
+
+# Calculate Portfolio Expected Return
+portfolio_return_after = port_mean(res3.W, R)
+
+# Calculate Portfolio Standard Deviation
+portfolio_risk_after = np.sqrt(port_var(res3.W, C))
+
+# Calculate Return over Risk
+return_over_risk = portfolio_return_after / portfolio_risk_after
+
+# Calculate Risk-Adjusted Return
+risk_adjusted_return = (portfolio_return_after - rf) / portfolio_risk_after
+
+# Calculate Sharpe Ratio
+sharpe_ratio = (portfolio_return_after - rf) / portfolio_risk_after
+
+# Calculate Treynor Ratio
+treynor_ratio = (portfolio_return_after - rf) / beta
+
+# Calculate Sortino Ratio
+downside_returns = [min(0, R[i] - rf) for i in range(len(R))]
+downside_risk = np.std(downside_returns)
+sortino_ratio = (portfolio_return_after - rf) / downside_risk
+
+# Print the performance measures
+print("Portfolio Expected Return:", portfolio_return_after)
+print("Portfolio Standard Deviation:", portfolio_risk_after)
+print("Return over Risk:", return_over_risk)
+print("Risk-Adjusted Return:", risk_adjusted_return)
+print("Sharpe Ratio:", sharpe_ratio)
+print("Treynor Ratio:", treynor_ratio)
+print("Sortino Ratio:", sortino_ratio)
+import pandas as pd
+
+# Crea un dizionario con i risultati
+results = {
+    "Performance Measure": ["Portfolio Expected Return", "Portfolio Standard Deviation", 
+                             "Return over Risk", "Risk-Adjusted Return", "Sharpe Ratio", 
+                             "Treynor Ratio", "Sortino Ratio","Rendimento equivalente certo"],
+    "Value": [portfolio_return_after, portfolio_risk_after, return_over_risk, 
+              risk_adjusted_return, sharpe_ratio, treynor_ratio, sortino_ratio,cer]
+}
+
+# Crea un DataFrame da risultati
+results_df = pd.DataFrame(results)
+
+# Stampa il DataFrame
+print(results_df)
+def equally_weighted_portfolio(R):
+    n = len(R)
+    W = np.ones(n) / n
+    return W
+
+# Calcola i pesi del portafoglio equally weighted
+W_eq = equally_weighted_portfolio(R)
+
+# Calcola il rendimento e la varianza del portafoglio equally weighted
+mean_eq, var_eq = port_mean_var(W_eq, R, C)
+
+# Displaying results
+plt.figure(figsize=(14, 10))  # Imposta una dimensione della figura più grande per una migliore visualizzazione
+display_assets(names, R + rf, C, color='red')
+display_frontier(res1, label='Historical returns', color='red')
+display_assets(names, Pi + rf, C, color='green')
+display_frontier(res2, label='Implied returns', color='green')
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Implied returns (adjusted views)', color='blue')
+plt.scatter(np.sqrt(var_eq), mean_eq, color='orange', label='Equally weighted portfolio')
+plt.xlabel('variance $\sigma$')
+plt.ylabel('mean $\mu$')
+plt.legend()
+plt.show()
+
+# Calcola le misure di performance per il portafoglio equally weighted
+portfolio_return_eq = port_mean(W_eq, R)
+portfolio_risk_eq = np.sqrt(port_var(W_eq, C))
+sharpe_ratio_eq = (portfolio_return_eq - rf) / portfolio_risk_eq
+treynor_ratio_eq = (portfolio_return_eq - rf) / beta
+downside_returns_eq = [min(0, R[i] - rf) for i in range(len(R))]
+downside_risk_eq = np.std(downside_returns_eq)
+sortino_ratio_eq = (portfolio_return_eq - rf) / downside_risk_eq
+
+# Stampa le misure di performance per il portafoglio equally weighted
+print("Equally Weighted Portfolio Performance Measures:")
+print("Portfolio Expected Return:", portfolio_return_eq)
+print("Portfolio Standard Deviation:", portfolio_risk_eq)
+print("Sharpe Ratio:", sharpe_ratio_eq)
+print("Treynor Ratio:", treynor_ratio_eq)
+print("Sortino Ratio:", sortino_ratio_eq)
+print("Equally Weighted Portfolio Weights:")
+for i, name in enumerate(names):
+    print(f"{name}: {W_eq[i]}")
+print("Black-Litterman Portfolio Weights:")
+for i, name in enumerate(names):
+    print(f"{name}: {res3.W[i]}")
+# Implementazione della strategia equally-weighted
+n_assets = len(names)
+W_equally_weighted = np.ones(n_assets) / n_assets
+
+# Calcolo delle performance per la strategia equally-weighted
+portfolio_return_equally_weighted = port_mean(W_equally_weighted, R)
+portfolio_risk_equally_weighted = np.sqrt(port_var(W_equally_weighted, C))
+sharpe_ratio_equally_weighted = (portfolio_return_equally_weighted - rf) / portfolio_risk_equally_weighted
+
+# Confronto delle performance
+print("Performance della strategia Black-Litterman:")
+print("Sharpe Ratio:", sharpe_ratio)
+print("\nPerformance della strategia Equally-Weighted:")
+print("Sharpe Ratio:", sharpe_ratio_equally_weighted)
+# Costi di transazione (bid-ask spread come percentuale del prezzo)
+bid_ask_spread_percent = 0.6
+
+# Aggiunta dei costi di transazione al calcolo della varianza del portafoglio
+def port_var_with_transaction_costs(W, C, bid_ask_spread_percent):
+    transaction_costs = np.dot(W, np.sqrt(np.diag(C))) * bid_ask_spread_percent
+    return port_var(W, C) + np.sum(transaction_costs)
+
+# Calcolo della varianza del portafoglio con i costi di transazione per le strategie
+portfolio_risk_after_transaction_costs = np.sqrt(port_var_with_transaction_costs(res3.W, C, bid_ask_spread_percent))
+portfolio_risk_equally_weighted_after_transaction_costs = np.sqrt(port_var_with_transaction_costs(W_equally_weighted, C, bid_ask_spread_percent))
+
+# Calcolo del Sharpe Ratio con i costi di transazione per le strategie
+sharpe_ratio_after_transaction_costs = (portfolio_return_after - rf) / portfolio_risk_after_transaction_costs
+sharpe_ratio_equally_weighted_after_transaction_costs = (portfolio_return_equally_weighted - rf) / portfolio_risk_equally_weighted_after_transaction_costs
+
+# Confronto delle performance con i costi di transazione
+print("Performance della strategia Black-Litterman con costi di transazione:")
+print("Sharpe Ratio:", sharpe_ratio_after_transaction_costs)
+print("\nPerformance della strategia Equally-Weighted con costi di transazione:")
+print("Sharpe Ratio:", sharpe_ratio_equally_weighted_after_transaction_costs)
+
+# Grafico 1: Frontiera efficiente senza e con costi di transazione per la strategia Black-Litterman
+plt.figure(figsize=(10, 6))
+display_assets(names, Pi_adj + rf, C, color='blue')
+display_frontier(res3, label='Implied returns (adjusted views)', color='blue')
+plt.title('Frontiera efficiente con costi di transazione (Black-Litterman)')
+plt.xlabel('Varianza $\sigma$')
+plt.ylabel('Rendimento medio $\mu$')
+plt.legend()
+plt.show()
+
+# Grafico 2: Frontiera efficiente senza e con costi di transazione per la strategia Equally-Weighted
+plt.figure(figsize=(10, 6))
+display_assets(names, W, C, color='black')
+display_frontier(res1, label='Historical returns', color='black')
+plt.title('Frontiera efficiente con costi di transazione (Equally-Weighted)')
+plt.xlabel('Varianza $\sigma$')
+plt.ylabel('Rendimento medio $\mu$')
+plt.legend()
+plt.show()
+
+# Grafico 3: Confronto dei rendimenti attesi dei portafogli ottimizzati con e senza costi di transazione
+plt.figure(figsize=(8, 6))
+plt.bar(['Black-Litterman', 'Equally-Weighted'],
+        [portfolio_return_after, portfolio_return_equally_weighted],
+        color=['blue', 'red'])
+plt.title('Confronto dei rendimenti attesi con costi di transazione')
+plt.ylabel('Rendimento atteso')
+plt.show()
+
+# Grafico 4: Confronto delle varianze dei portafogli ottimizzati con e senza costi di transazione
+plt.figure(figsize=(8, 6))
+plt.bar(['Black-Litterman', 'Equally-Weighted'],
+        [portfolio_risk_after_transaction_costs, portfolio_risk_equally_weighted_after_transaction_costs],
+        color=['blue', 'red'])
+plt.title('Confronto delle varianze con costi di transazione')
+plt.ylabel('Varianza del portafoglio')
+plt.show()
+
+import pandas as pd
+
+# Definiamo le misure di performance per entrambe le strategie
+performance_metrics = {
+    'Rendimento atteso': [portfolio_return_after, portfolio_return_equally_weighted],
+    'Varianza': [portfolio_risk_after_transaction_costs, portfolio_risk_equally_weighted_after_transaction_costs],
+    'Sharpe Ratio': [sharpe_ratio_after_transaction_costs, sharpe_ratio_equally_weighted_after_transaction_costs],
+    # Aggiungi altre misure di performance se necessario
+}
+
+# Creiamo il DataFrame Pandas
+df_performance = pd.DataFrame(performance_metrics, index=['Black-Litterman', 'Equally-Weighted'])
+
+# Visualizziamo il DataFrame
+print(df_performance)
+
+######################################################### RISK PARITY BL 
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from scipy.optimize import minimize
+import matplotlib.pyplot as plt
+
+# Caricamento dei dati
+def load_data(tickers, start_date, end_date):
+    data = yf.download(tickers, start=start_date, end=end_date)
+    return data['Adj Close']
+
+# Calcolo dei rendimenti
+def get_returns(data):
+    return data.pct_change().dropna()
+
+# Funzione per calcolare i pesi Risk Parity
+def risk_parity_weights(cov_matrix):
+    def objective(weights):
+        portfolio_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+        risk_contributions = np.multiply(weights, np.dot(cov_matrix, weights)) / portfolio_variance
+        return np.sum((risk_contributions - risk_contributions.mean())**2)
+    n = cov_matrix.shape[0]
+    initial_weights = np.ones(n) / n
+    bounds = tuple((0, 1) for _ in range(n))
+    constraints = [{'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1}]
+    result = minimize(objective, initial_weights, method='SLSQP', bounds=bounds, constraints=constraints)
+    return result.x
+
+# Funzione Black-Litterman per aggiustare i rendimenti
+def black_litterman(τ, Σ, market_prior, P, Q):
+    Σ_inv = np.linalg.inv(Σ)
+    middle_term = np.linalg.inv(P.T @ np.linalg.inv(τ * Σ) @ P + np.linalg.inv(np.diag(Q)))
+    adjusted_mean = market_prior + Σ @ P.T @ middle_term @ (Q - P @ market_prior)
+    return adjusted_mean
+
+# Misura delle performance del portafoglio
+def portfolio_performance(returns, weights):
+    mean_returns = returns.mean() * 252
+    portfolio_return = np.dot(mean_returns, weights)
+    cov_matrix = returns.cov() * 252
+    portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    sharpe_ratio = portfolio_return / portfolio_std_dev
+    return portfolio_return, portfolio_std_dev, sharpe_ratio
+
+# Funzione per calcolare i rendimenti netti del portafoglio considerando i costi di transazione
+def portfolio_net_performance(returns, weights, transaction_costs):
+    mean_returns = returns.mean() * 252
+    portfolio_return = np.dot(mean_returns, weights)
+    cov_matrix = returns.cov() * 252
+    portfolio_std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    sharpe_ratio = portfolio_return / portfolio_std_dev
+    net_portfolio_return = portfolio_return - transaction_costs
+    return net_portfolio_return, portfolio_std_dev, sharpe_ratio
+
+# Setup iniziale
+tickers = [  'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BABA', 'V', 'JNJ', 'WMT',
+    'JPM', 'MA', 'PG', 'UNH', 'DIS', 'NVDA', 'HD', 'BAC', 'VZ', 'IBM',
+    'BRK-A', 'XOM', 'NSRGY', 'PFE', 'KO', 'PEP', 'NKE', 'TM', 'SAP', 'ORCL',
+    'CSCO', 'T', 'VOD', 'INTC', 'QCOM', 'ASML', 'TXN', 'ADBE', 'CRM', 'MCD',
+    'ABT', 'MRK', 'NVS', 'GE', 'RY', 'HSBC', 'BHP', 'BP', 'CVX', 'SNY',
+    'BMY', 'AMGN', 'ABBV', 'GILD', 'BA', 'DHR', 'MMM', 'ACN', 'HON', 'UPS',
+    'UNP', 'RTX', 'CAT', 'DE', 'NEE', 'DUK', 'SO', 'AEP', 'EXC', 'SIEGY', 'BASFY', 'AIQUY'
+
+]
+start_date = '2017-01-01'
+end_date = '2023-01-01'
+data = load_data(tickers, start_date, end_date)
+
+# Calcolo dei rendimenti e covarianza
+returns = get_returns(data)
+market_prior = returns.mean()
+cov_matrix = returns.cov()
+
+# Configurazione delle viste del mercato per Black-Litterman
+τ = 0.05  # Scaling factor
+P = np.eye(len(tickers))  # Identity matrix for views
+Q = (market_prior * 1.02).values  # Views (2% increase)
+
+# Applicazione del modello Black-Litterman
+adjusted_means = black_litterman(τ, cov_matrix, market_prior.values, P, Q)
+
+# Calcolo dei pesi Risk Parity con i rendimenti aggiustati
+cov_adjusted = returns.cov()
+weights_rp = risk_parity_weights(cov_adjusted)
+
+# Divisione dei dati in-sample e out-of-sample
+split_date = '2020-01-01'
+in_sample_data = data[:split_date]
+out_of_sample_data = data[split_date:]
+in_sample_returns = get_returns(in_sample_data)
+out_of_sample_returns = get_returns(out_of_sample_data)
+
+# Calcolo delle performance
+in_sample_perf = portfolio_performance(in_sample_returns, weights_rp)
+out_of_sample_perf = portfolio_performance(out_of_sample_returns, weights_rp)
+
+# Confronto con strategia Equally Weighted
+ew_weights = np.ones(len(tickers)) / len(tickers)
+ew_in_sample_perf = portfolio_performance(in_sample_returns, ew_weights)
+ew_out_of_sample_perf = portfolio_performance(out_of_sample_returns, ew_weights)
+
+# Calcolo dei costi di transazione
+transaction_costs = 0.1  # 0.1% transaction costs
+
+# Calcolo delle performance nette
+net_in_sample_perf_rp = portfolio_net_performance(in_sample_returns, weights_rp, transaction_costs)
+net_out_of_sample_perf_rp = portfolio_net_performance(out_of_sample_returns, weights_rp, transaction_costs)
+net_in_sample_perf_ew = portfolio_net_performance(in_sample_returns, ew_weights, transaction_costs)
+net_out_of_sample_perf_ew = portfolio_net_performance(out_of_sample_returns, ew_weights, transaction_costs)
+
+# Stampa dei risultati
+print("In-Sample Performance:")
+print("Risk Parity Portfolio:")
+print("   Return:", in_sample_perf[0])
+print("   Volatility:", in_sample_perf[1])
+print("   Sharpe Ratio:", in_sample_perf[2])
+print("Equally Weighted Portfolio:")
+print("   Return:", ew_in_sample_perf[0])
+print("   Volatility:", ew_in_sample_perf[1])
+print("   Sharpe Ratio:", ew_in_sample_perf[2])
+
+print("\nOut-of-Sample Performance:")
+print("Risk Parity Portfolio:")
+print("   Return:", out_of_sample_perf[0])
+print("   Volatility:", out_of_sample_perf[1])
+print("   Sharpe Ratio:", out_of_sample_perf[2])
+print("Equally Weighted Portfolio:")
+print("   Return:", ew_out_of_sample_perf[0])
+print("   Volatility:", ew_out_of_sample_perf[1])
+print("   Sharpe Ratio:", ew_out_of_sample_perf[2])
+
+
+print("\nNet Out-of-Sample Performance (with transaction costs):")
+print("Risk Parity Portfolio:")
+print("   Return:", net_out_of_sample_perf_rp[0])
+print("   Volatility:", net_out_of_sample_perf_rp[1])
+print("   Sharpe Ratio:", net_out_of_sample_perf_rp[2])
+print("Equally Weighted Portfolio:")
+print("   Return:", net_out_of_sample_perf_ew[0])
+print("   Volatility:", net_out_of_sample_perf_ew[1])
+print("   Sharpe Ratio:", net_out_of_sample_perf_ew[2])
+
+################################################################################################################ PARAMETRO TAU 
+import numpy as np
+import scipy.stats as stat
+import matplotlib.pyplot as plt
+from ipywidgets import interact, FloatSlider
+np.random.seed(12)
+
+N = 10                                         # Number of assets
+T = 200                                          # Sample size
+w_m = np.random.rand(N)
+w_m /= w_m.sum()                                 # Normalize to sum to 1
+μ = (np.random.randn(N) + 5) / 100               # Mean excess returns
+S = np.random.randn(N, N)                        # Random matrix for covariance
+V = S @ S.T                                      # Symmetric positive semi-definite matrix
+Σ = V * (w_m @ μ)**2 / (w_m @ V @ w_m)           # Adjusted for Sharpe ratio of 1
+δ = 1 / np.sqrt(w_m @ Σ @ w_m)                   # Risk aversion
+excess_return = stat.multivariate_normal(μ, Σ)
+sample = excess_return.rvs(T)                    # Generate samples
+μ_est = sample.mean(axis=0).reshape(N, 1)        # Estimated mean
+Σ_est = np.cov(sample.T)                         # Estimated covariance
+
+# Market and BL mean portfolio calculations
+σ_m = w_m @ Σ_est @ w_m
+d_m = (w_m @ μ_est) / σ_m
+μ_m = (d_m * Σ_est @ w_m).reshape(N, 1)
+
+def black_litterman(λ, μ1, μ2, Σ1, Σ2):
+    """ Black-Litterman model to combine different views """
+    Σ1_inv = np.linalg.inv(Σ1)
+    Σ2_inv = np.linalg.inv(Σ2)
+    μ_tilde = np.linalg.solve(Σ1_inv + λ * Σ2_inv, Σ1_inv @ μ1 + λ * Σ2_inv @ μ2)
+    return μ_tilde
+
+τ = 1
+μ_tilde = black_litterman(1, μ_m, μ_est, Σ_est, τ * Σ_est)
+
+# Interactive plot to adjust τ and see effects on portfolio weights
+τ_slider = FloatSlider(min=0.05, max=10, step=0.5, value=τ)
+@interact(τ=τ_slider)
+def BL_plot(τ):
+    μ_tilde = black_litterman(1, μ_m, μ_est, Σ_est, τ * Σ_est)
+    w_tilde = np.linalg.solve(δ * Σ_est, μ_tilde)
+    plt.figure(figsize=(12, 6))
+    plt.plot(np.arange(N) + 1, μ_est.flatten(), 'o', label='Estimated $\hat{\mu}$')
+    plt.plot(np.arange(N) + 1, μ_m.flatten(), 'x', label='Market Implied $\mu_{BL}$')
+    plt.plot(np.arange(N) + 1, μ_tilde.flatten(), '*', label='BL Adjusted $\tilde{\mu}$')
+    plt.legend()
+    plt.xlabel('Assets')
+    plt.title('Risultati del Modello Black-Litterman')
+    plt.grid(True)
+    plt.show()
+
+# Sample generator for stochastic processes
+def sample_generator(h, N, M, μ, κ, σ):
+    ϕ = (1 - np.exp(-κ * h)) * μ
+    ρ = np.exp(-κ * h)
+    s = σ**2 * (1 - np.exp(-2 * κ * h)) / (2 * κ)
+    ε_path = stat.norm(0, np.sqrt(s)).rvs((M, N))
+    y_path = np.zeros((M, N + 1))
+    y_path[:, 0] = stat.norm(μ, np.sqrt(σ**2 / (2 * κ))).rvs(M)
+    for i in range(N):
+        y_path[:, i + 1] = ϕ + ρ * y_path[:, i] + ε_path[:, i]
+    return y_path
+
+# Example call to the function (uncomment to run)
+# y_path = sample_generator(1, 10, 100, 0.05, 0.1, 0.5)
+# print(y_path)
