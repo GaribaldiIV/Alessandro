@@ -709,6 +709,54 @@ print("Sharpe Ratio In-Sample:", sharpe_ratio_in)
 print("Sharpe Ratio Out-of-Sample:", sharpe_ratio_out)
 
 ##################################################################################################################### FAMA FRENCH 5 FACTORS
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+import statsmodels.formula.api as smf
+import pandas_datareader.data as web
+
+def fetch_stock_data(symbols, start_date, end_date):
+    """Fetches stock price data from Yahoo Finance."""
+    stock_data = yf.download(symbols, start=start_date, end=end_date)['Adj Close']
+    return stock_data.pct_change().dropna()
+
+def load_fama_french_factors():
+    """Loads Fama-French 5-factor model data directly from the web."""
+    ff_factors = web.DataReader('F-F_Research_Data_5_Factors_2x3_daily', 'famafrench')[0]
+    ff_factors /= 100  # Convert to decimal format
+    ff_factors['RF'] = ff_factors['RF'].fillna(method='ffill')
+    return ff_factors
+
+def fit_fama_french(stock_returns, ff_factors):
+    """Fits the Fama-French three-factor model to the stock returns using statsmodels.formula.api."""
+    results = {}
+    for ticker in stock_returns.columns:
+        formula = f'{ticker} ~ Mkt_RF + SMB + HML + RMW + CMA'
+        data = pd.concat([stock_returns[ticker], ff_factors], axis=1).dropna()
+        data.columns = ['Returns', 'Mkt_RF', 'SMB', 'HML', 'RMW', 'CMA', 'RF']
+        data['Excess_Returns'] = data['Returns'] - data['RF']
+        model = smf.ols(formula='Excess_Returns ~ Mkt_RF + SMB + HML + RMW + CMA', data=data).fit()
+        results[ticker] = model
+    return results
+
+# Configuration
+symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA']  # Example set of stocks
+start_date = '2015-01-01'
+end_date = '2020-12-31'
+
+# Load data
+stock_returns = fetch_stock_data(symbols, start_date, end_date)
+ff_factors = load_fama_french_factors()
+
+# Fit the Fama-French model
+model_results = fit_fama_french(stock_returns, ff_factors)
+
+# Display model summaries
+for ticker, result in model_results.items():
+    print(f'Results for {ticker}:')
+    print(result.summary())
+    print('\n')
 
 import numpy as np
 import pandas as pd
@@ -1036,6 +1084,404 @@ sharpe_equal = sharpe_ratio(initial_weights, returns)
 
 print(f"Rapporto Sharpe Portafoglio Ottimizzato: {sharpe_optimized}")
 print(f"Rapporto Sharpe Portafoglio 1/n: {sharpe_equal}")
+
+##################################################################################################### indici-prova1 window 252
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Setting the style for seaborn plots
+sns.set(style='whitegrid')
+
+# Ticker symbols for major world indices
+tickers = ['^GSPC', '^IXIC', '^FCHI', '^GDAXI', '^HSI', '^N225', '^KS11']
+
+# Fetch historical data using yfinance
+data = yf.download(tickers, start='2000-01-01', end='2020-12-04')['Adj Close']
+
+# Checking the first and last 5 rows of data
+print(data.head())
+print(data.tail())
+
+# Calculate simple returns
+simple_returns = data.pct_change()
+
+# Displaying the first 10 rows of the simple returns data
+print(simple_returns.head(10))
+
+# Visualizing the simple returns
+plt.figure(figsize=(14, 7))
+for c in simple_returns.columns.values:
+    plt.plot(simple_returns.index, simple_returns[c], lw=1, alpha=0.8, label=c)
+plt.legend(loc='upper right', fontsize=12)
+plt.ylabel('Daily Simple Returns')
+plt.title('Visual Comparison of Daily Returns of World Indices')
+plt.show()
+#pandas.Dataframe.shift(# lags)
+#Using shift(1), we can get the row just above the present row. Here, # lags is 1.
+#log() is a function given in numpy package in python. It calculates the natural log of the value given inside it.
+#We will use a simple rate of return calculation instead of Log returns.
+log_returns_data = (data / data.shift(1))-1
+
+#Using name.head() instead or print() function to show the value inside it on the console.
+log_returns_data.head(10)
+#Cleaning and rearranging the data series with df['DataFrame Column'].replace(np.nan, 0) that replaces Non A Number (NaN) value to 0
+log_returns_data = log_returns_data.replace(np.nan, 0)
+log_returns_data
+
+#Create a graph of the daily returns of each indices
+log_returns_data.plot(figsize=(8,5))
+plt.show()
+#Using pandas : df.corr() to plot a correlation matrix
+matrix_correlation = log_returns_data.corr()
+
+ax = plt.axes()
+sns.heatmap(data= matrix_correlation,
+            annot= True)
+
+plt.show()
+nb_weeks = len(data)
+#Define the weights : equal weights with 7 indices
+w = np.array ([1/7,1/7,1/7,1/7,1/7,1/7,1/7]) 
+
+print('The portfolio total weight is : ' + str(round(sum(w), 2)))
+
+equal_weighted_portfolio_return = np.sum(w * log_returns_data.mean() * 250)
+equal_weighted_portfolio_vol = np.sqrt(np.dot(w.T,np.dot(log_returns_data.cov() * 250, w)))
+
+print('The return of an equal weighted portofolio is : ' + str(round(equal_weighted_portfolio_return*100, 2))+'%.')
+print('The volatility of an equal weighted portofolio is : ' + str(round(equal_weighted_portfolio_vol*100, 2))+'%.')
+import numpy as np
+import pandas as pd
+
+# Assuming `data` contains the fetched stock indices data and `log_returns_data` is calculated as follows:
+# Calculate log returns instead of simple returns since the variable name suggests log returns
+log_returns_data = np.log(data / data.shift(1))
+
+# Number of weeks in the dataset
+nb_weeks = len(data)  
+
+# Define the weights: equal weights with 7 indices
+w = np.array([1/7]*7)  # A more concise way to initialize equal weights
+
+print('The portfolio total weight is:', round(sum(w), 2))
+
+# Calculate equal weighted portfolio return and volatility (annualized)
+equal_weighted_portfolio_return = np.sum(w * log_returns_data.mean() * 250)
+equal_weighted_portfolio_vol = np.sqrt(np.dot(w.T, np.dot(log_returns_data.cov() * 250, w)))
+
+print('The return of an equal weighted portfolio is:', round(equal_weighted_portfolio_return * 100, 2), '%.')
+print('The volatility of an equal weighted portfolio is:', round(equal_weighted_portfolio_vol * 100, 2), '%.')
+
+# Calculate annual mean return
+u = log_returns_data.mean()
+annual_u = log_returns_data.mean() * 250  # Summing up mean daily returns to get an annual estimate
+
+# Calculate annual standard deviation (volatility)
+std = log_returns_data.std()
+annual_std = log_returns_data.std() * np.sqrt(250)  # Annualizing standard deviation
+
+# Calculate annual variance
+annual_var = log_returns_data.var() * 250
+print('Annual Variance:', round(annual_var, 4))
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Assuming `data` contains the fetched stock indices data
+# Calculate log returns
+log_returns_data = np.log(data / data.shift(1))
+
+# Define the weights: equal weights with 7 indices
+w = np.array([1/7]*7)
+
+# Calculate equal weighted portfolio return and volatility (annualized)
+equal_weighted_portfolio_return = np.sum(w * log_returns_data.mean() * 250)
+equal_weighted_portfolio_vol = np.sqrt(np.dot(w.T, np.dot(log_returns_data.cov() * 250, w)))
+
+# Annual metrics for log returns
+annual_u = log_returns_data.mean() * 250  # Annual mean returns
+annual_std = log_returns_data.std() * np.sqrt(250)  # Annual standard deviation
+annual_var = log_returns_data.var() * 250  # Annual variance
+
+# Plotting the annualized returns and volatility
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+
+# Plot for annualized returns
+ax[0].bar(log_returns_data.columns, annual_u * 100)
+ax[0].set_title('Annualized Returns of Indices')
+ax[0].set_ylabel('Annual Returns (%)')
+ax[0].set_xticklabels(log_returns_data.columns, rotation=45, ha='right')
+
+# Plot for annualized volatility
+ax[1].bar(log_returns_data.columns, annual_std * 100)
+ax[1].set_title('Annualized Volatility of Indices')
+ax[1].set_ylabel('Annual Volatility (%)')
+ax[1].set_xticklabels(log_returns_data.columns, rotation=45, ha='right')
+
+plt.tight_layout()
+plt.show()
+
+# Plotting the cumulative returns of the equally weighted portfolio
+cumulative_returns = (1 + log_returns_data.dot(w)).cumprod()
+plt.figure(figsize=(10, 6))
+plt.plot(cumulative_returns, label='Equally Weighted Portfolio')
+plt.title('Cumulative Returns of Equally Weighted Portfolio')
+plt.xlabel('Date')
+plt.ylabel('Cumulative Return')
+plt.legend()
+plt.grid(True)
+plt.show()
+#Plot Max drawdown
+# We are going to use a trailing 252 trading day window
+window = 252
+
+# Calculate the max drawdown in the past window days for each day in the series.
+# Use min_periods=1 if you want to let the first 252 days data have an expanding window
+Roll_Max = data.rolling(window, min_periods=1).max()
+Daily_Drawdown = data/Roll_Max - 1.0
+
+# Next we calculate the minimum (negative) daily drawdown in that window.
+# Use min_periods=1 if you want to allow the expanding window
+Max_Daily_Drawdown = Daily_Drawdown.rolling(window, min_periods=1).min()
+
+# Plot the results
+Daily_Drawdown.plot()
+Max_Daily_Drawdown.plot()
+plt.show()
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import yfinance as yf
+from scipy.stats import norm
+
+# Fetch data
+tickers = ['^GSPC', '^IXIC', '^FCHI', '^GDAXI', '^HSI', '^N225', '^KS11']
+data = yf.download(tickers, start='2000-01-01', end='2020-12-04')['Adj Close']
+
+# Calculate log returns
+log_returns_data = np.log(data / data.shift(1))
+window = 252
+Roll_Max = data.rolling(window, min_periods=1).max()
+Daily_Drawdown = data / Roll_Max - 1.0
+Max_Daily_Drawdown = Daily_Drawdown.rolling(window, min_periods=1).min()
+
+# Plot Drawdowns
+plt.figure(figsize=(15, 7))
+Daily_Drawdown.plot(title="Daily Drawdown")
+Max_Daily_Drawdown.plot(title="Maximum Daily Drawdown")
+plt.show()
+number_of_indices = len(tickers)
+portfolios_returns, portfolios_volatility = [], []
+
+# Monte Carlo simulation settings
+nb_simulations = 15000
+for _ in range(nb_simulations):
+    weights = np.random.random(number_of_indices)
+    weights /= np.sum(weights)
+    portfolios_returns.append(np.sum(weights * log_returns_data.mean()) * 250)
+    portfolios_volatility.append(np.sqrt(np.dot(weights.T, np.dot(log_returns_data.cov() * 250, weights))))
+
+# Store results in DataFrame
+possible_portfolios = pd.DataFrame({'Return': portfolios_returns, 'Volatility': portfolios_volatility})
+print(possible_portfolios.head(), possible_portfolios.tail())
+
+# Plotting the risk-return scatter plot
+possible_portfolios.plot(x='Volatility', y='Return', kind='scatter', figsize=(10, 6))
+plt.xlabel('Expected Volatility')
+plt.ylabel('Expected Return')
+plt.title('Portfolio Optimization')
+plt.show()
+portfolio_past_perf = np.sum(log_returns_data * weights, axis=1)
+portfolio_past_price = [100]
+
+for returns in portfolio_past_perf[1:]:
+    portfolio_past_price.append(portfolio_past_price[-1] * (1 + returns))
+
+portfolio_past_perf2 = pd.DataFrame(portfolio_past_perf)
+portfolio_past_price2 = pd.DataFrame(portfolio_past_price)
+
+U = portfolio_past_perf2.mean()
+var = portfolio_past_perf2.var()
+drift = U - 0.5 * var
+stdev = portfolio_past_perf2.std()
+
+time_intervals = 260
+scenarios = 15
+S0 = portfolio_past_price2.iloc[-1]
+weekly_return = np.exp(drift.values + stdev.values * norm.ppf(np.random.rand(time_intervals, scenarios)))
+
+future_prices = np.zeros_like(weekly_return)
+future_prices[0] = S0
+
+for t in range(1, time_intervals):
+    future_prices[t] = future_prices[t-1] * weekly_return[t]
+
+# Plot Monte Carlo Simulation
+plt.figure(figsize=(10, 6))
+plt.plot(future_prices)
+plt.title('Monte Carlo Simulation for Future Prices')
+plt.xlabel('Time Intervals')
+plt.ylabel('Future Prices')
+plt.show()
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Define tickers and fetch data
+tickers = ['^GSPC', '^IXIC', '^FCHI', '^GDAXI', '^HSI', '^N225', '^KS11']
+data = yf.download(tickers, start='2000-01-01', end='2020-12-04')['Adj Close']
+
+# Calculate log returns
+log_returns = np.log(data / data.shift(1))
+cumulative_returns = (log_returns + 1).cumprod()
+plt.figure(figsize=(12, 8))
+cumulative_returns.plot()
+plt.title('Cumulative Returns of Indices')
+plt.ylabel('Cumulative Returns')
+plt.xlabel('Year')
+plt.legend(title='Index')
+plt.show()
+
+correlation = log_returns.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt=".2f")
+plt.title('Correlation Matrix of Indices')
+plt.show()
+
+
+# Calculate annual returns
+annual_returns = log_returns.resample('Y').apply(lambda x: (x + 1).prod() - 1)
+plt.figure(figsize=(12, 8))
+sns.heatmap(annual_returns.T, annot=True, cmap='RdYlGn', fmt=".2%")
+plt.title('Annual Returns Heatmap')
+plt.xlabel('Year')
+plt.yticks(rotation=0)  # Keep the index names horizontal
+plt.show()
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+
+# Define tickers and fetch data
+tickers = ['^GSPC', '^IXIC', '^FCHI', '^GDAXI', '^HSI', '^N225', '^KS11']
+data = yf.download(tickers, start='2000-01-01', end='2020-12-04')['Adj Close']
+
+# Calculate log returns
+log_returns = np.log(data / data.shift(1))
+
+# Define portfolio weights (equal weights assumed here)
+weights = np.array([1/len(tickers)] * len(tickers))
+
+# Calculate portfolio log returns
+portfolio_log_returns = (log_returns * weights).sum(axis=1)
+# Annualized Return
+annualized_return = portfolio_log_returns.mean() * 252
+
+# Annualized Volatility
+annualized_volatility = portfolio_log_returns.std() * np.sqrt(252)
+
+# Risk-free rate for Sharpe and Sortino ratios
+risk_free_rate = 0.01
+
+# Sharpe Ratio
+sharpe_ratio = (annualized_return - risk_free_rate) / annualized_volatility
+
+# Max Drawdown
+cumulative_returns = np.exp(portfolio_log_returns.cumsum())  # converting log returns to cumulative returns
+rolling_max = cumulative_returns.rolling(window=252, min_periods=1).max()
+daily_drawdown = cumulative_returns / rolling_max - 1
+max_drawdown = daily_drawdown.min()
+
+# Sortino Ratio
+target_return = 0
+downside_returns = portfolio_log_returns[portfolio_log_returns < target_return]
+annualized_downside = downside_returns.std() * np.sqrt(252)
+sortino_ratio = (annualized_return - risk_free_rate) / annualized_downside
+
+# Collect metrics in a DataFrame
+performance_metrics = pd.DataFrame({
+    'Annualized Return': [annualized_return],
+    'Annualized Volatility': [annualized_volatility],
+    'Sharpe Ratio': [sharpe_ratio],
+    'Max Drawdown': [max_drawdown],
+    'Sortino Ratio': [sortino_ratio]
+})
+
+# Display formatted metrics
+performance_formatted = performance_metrics.applymap(lambda x: f"{x:.2%}" if isinstance(x, float) else x)
+print(performance_formatted)
+plt.figure(figsize=(12, 6))
+plt.plot(cumulative_returns, label='Cumulative Returns')
+plt.title('Portfolio Cumulative Returns')
+plt.xlabel('Date')
+plt.ylabel('Growth of $1 Investment')
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(daily_drawdown, label='Daily Drawdown')
+plt.title('Portfolio Max Drawdown')
+plt.xlabel('Date')
+plt.ylabel('Drawdown')
+plt.legend()
+plt.show()
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Numero di osservazioni e di asset
+n_obs = 300  
+n_assets = 20
+
+# Creazione di etichette per gli asset
+assets = [
+    'S&P500 Sector ' + str(i+1) if i < 10 else
+    'FTSE Europe Sector ' + str(i-9) if i < 15 else
+    'FTSE Canada Sector ' + str(i-14) if i < 17 else
+    'FTSE Japan Sector ' + str(i-16) for i in range(n_assets)
+]
+
+# Generazione dei rendimenti fittizi
+np.random.seed(0)
+returns = np.random.randn(n_obs, n_assets) * 0.01  # Supponiamo una deviazione standard del 1% per i rendimenti
+
+# Creazione del DataFrame dei rendimenti
+dates = pd.date_range('1995-01', periods=n_obs, freq='M')
+returns_df = pd.DataFrame(returns, index=dates, columns=assets)
+
+# Strategia Equally Weighted
+equal_weights = np.array([1/n_assets] * n_assets)
+portfolio_equal = returns_df.dot(equal_weights)
+
+# Capitalizzazione di mercato fittizia per ciascun settore
+market_caps = np.random.randint(100, 1000, size=n_assets)
+
+# Strategia Value Weighted
+value_weights = market_caps / market_caps.sum()
+portfolio_value = returns_df.dot(value_weights)
+
+# Grafico dei rendimenti cumulativi
+cumulative_returns_equal = (1 + portfolio_equal).cumprod() - 1
+cumulative_returns_value = (1 + portfolio_value).cumprod() - 1
+
+plt.figure(figsize=(14, 7))
+plt.plot(cumulative_returns_equal, label='Equally Weighted')
+plt.plot(cumulative_returns_value, label='Value Weighted')
+plt.title('Confronto tra strategia Equally Weighted e Value Weighted')
+plt.xlabel('Data')
+plt.ylabel('Ritorni Cumulativi')
+plt.legend()
+plt.show()
+
+# Confronto delle performance
+print("Performance finale Equally Weighted:", cumulative_returns_equal.iloc[-1])
+print("Performance finale Value Weighted:", cumulative_returns_value.iloc[-1])
 
 #################################################################################################################### OUT-OF-SAMPLE prova1
 import yfinance as yf
@@ -2374,6 +2820,90 @@ print("Equally Weighted Portfolio:")
 print("   Return:", net_out_of_sample_perf_ew[0])
 print("   Volatility:", net_out_of_sample_perf_ew[1])
 print("   Sharpe Ratio:", net_out_of_sample_perf_ew[2])
+######################################################################################## BACKTEST + ROLLING SHARPE
+
+# code sourced from Statology - How to Perform Simple Linear Regression in Python
+# check references for a link to the source code
+
+#define response
+y = df['weight']
+
+#define feature
+x = df[['body_mass']]
+
+#add constant to predictor variables
+x = sm.add_constant(x)
+
+#fit linear regression model
+model = sm.OLS(y, x).fit()
+
+#view model summary
+print(model.summary())
+import statsmodels.formula.api as sm # switch to statsmodels.formula.api because statsmodels.api kept throwing me an error
+
+def assetPriceReg(df_stk):
+    import pandas_datareader.data as web  # module for reading datasets directly from the web
+    
+    # Reading in factor data
+    df_factors = web.DataReader('F-F_Research_Data_5_Factors_2x3_daily', 'famafrench')[0]
+    df_factors.rename(columns={'Mkt-RF': 'MKT'}, inplace=True) # rename the market excess expected return column
+    df_factors['MKT'] = df_factors['MKT']/100
+    df_factors['SMB'] = df_factors['SMB']/100
+    df_factors['HML'] = df_factors['HML']/100
+    df_factors['RMW'] = df_factors['RMW']/100
+    df_factors['CMA'] = df_factors['CMA']/100
+    
+    df_stock_factor = pd.merge(df_stk,df_factors,left_index=True,right_index=True) # Merging the stock and factor returns dataframes together
+    df_stock_factor['XsRet'] = df_stock_factor['Returns'] - df_stock_factor['RF'] # Calculating asset excess expected returns
+    print(df_stock_factor)
+    
+    # Running CAPM, FF3, and FF5 models.
+    CAPM = sm.ols(formula = 'XsRet ~ MKT', data=df_stock_factor).fit(cov_type='HAC',cov_kwds={'maxlags':1})
+    FF3 = sm.ols( formula = 'XsRet ~ MKT + SMB + HML', data=df_stock_factor).fit(cov_type='HAC',cov_kwds={'maxlags':1})
+    FF5 = sm.ols( formula = 'XsRet ~ MKT + SMB + HML + RMW + CMA', data=df_stock_factor).fit(cov_type='HAC',cov_kwds={'maxlags':1})
+
+    CAPMtstat = CAPM.tvalues
+    FF3tstat = FF3.tvalues
+    FF5tstat = FF5.tvalues
+
+    CAPMcoeff = CAPM.params
+    FF3coeff = FF3.params
+    FF5coeff = FF5.params
+
+    # DataFrame with coefficients and t-stats
+    results_df = pd.DataFrame({'CAPMcoeff':CAPMcoeff,'CAPMtstat':CAPMtstat,
+                               'FF3coeff':FF3coeff, 'FF3tstat':FF3tstat,
+                               'FF5coeff':FF5coeff, 'FF5tstat':FF5tstat},
+    index = ['Intercept', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'])
+
+    dfoutput = summary_col([CAPM,FF3, FF5],stars=True,float_format='%0.4f',
+                  model_names=['CAPM','FF3','FF5'],
+                  info_dict={'N':lambda x: "{0:d}".format(int(x.nobs)),
+                             'Adjusted R2':lambda x: "{:.4f}".format(x.rsquared_adj)}, 
+                             regressor_order = ['Intercept', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'])
+
+    print(f'\nThe CAPM Results are: \n{CAPM.summary()}')
+    print(f'\nThe Fama-French 3 Factor Model Results are: \n{FF3.summary()}')
+    print(f'\nThe Fama-French 5 Factor Model Results are: \n{FF5.summary()}')
+    print(f'\nSummary of Results: {dfoutput}')
+    return results_df
+portfolio_MEANVAR = Engine(
+    start_date = "2016-10-01",
+    portfolio = ['GLD', 'SPY', 'BND', 'TQQQ', 'GBTC', 'SHOP', 'BAC', 'BA'],
+    optimizer = "MEANVAR",
+    rebalance = "1y",
+)
+
+data = pd.DataFrame()
+
+empyrial(portfolio_MEANVAR)
+
+# You can pull the beta of your portfolio using these two lines if necessary:
+# beta_index = empyrial.df[''].index('Beta')
+# portfolio_beta = empyrial.df['Backtest'][beta_index]
+
+data['Returns'] = empyrial.returns
+df_regOutput = assetPriceReg(data)
 
 ################################################################################################################ PARAMETRO TAU 
 import numpy as np
