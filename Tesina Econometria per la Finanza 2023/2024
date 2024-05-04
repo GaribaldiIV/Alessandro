@@ -1483,6 +1483,85 @@ plt.show()
 print("Performance finale Equally Weighted:", cumulative_returns_equal.iloc[-1])
 print("Performance finale Value Weighted:", cumulative_returns_value.iloc[-1])
 
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
+
+class TearsheetStatistics:
+    def __init__(self, config, portfolio_handler, title=None, benchmark=None, periods=252, rolling_sharpe=False):
+        self.config = config
+        self.portfolio_handler = portfolio_handler
+        self.title = title
+        self.benchmark = benchmark
+        self.periods = periods
+        self.rolling_sharpe = rolling_sharpe
+
+    def get_results(self):
+        # Initialize the dictionary to store results
+        statistics = {}
+
+        # Equity
+        equity_s = pd.Series(self.portfolio_handler.equity).sort_index()
+
+        # Returns
+        returns_s = equity_s.pct_change().fillna(0.0)
+
+        # Rolling Annualised Sharpe
+        rolling = returns_s.rolling(window=self.periods)
+        rolling_sharpe_s = np.sqrt(self.periods) * (rolling.mean() / rolling.std())
+        statistics["rolling_sharpe"] = rolling_sharpe_s
+
+        # Benchmark statistics if benchmark ticker specified
+        if self.benchmark:
+            equity_b = pd.Series(self.portfolio_handler.equity_benchmark).sort_index()
+            returns_b = equity_b.pct_change().fillna(0.0)
+            rolling_b = returns_b.rolling(window=self.periods)
+            rolling_sharpe_b = np.sqrt(self.periods) * (rolling_b.mean() / rolling_b.std())
+            statistics["rolling_sharpe_b"] = rolling_sharpe_b
+
+        return statistics
+
+    def _plot_rolling_sharpe(self, stats, ax=None, **kwargs):
+        sharpe = stats['rolling_sharpe']
+
+        if self.benchmark:
+            benchmark = stats['rolling_sharpe_b']
+            benchmark.plot(lw=2, color='gray', label=self.benchmark, alpha=0.60, ax=ax, **kwargs)
+
+        sharpe.plot(lw=2, color='green', alpha=0.6, x_compat=False, label='Backtest', ax=ax, **kwargs)
+        ax.axvline(sharpe.index[self.periods], linestyle="dashed", c="gray", lw=2)
+        ax.set_ylabel('Rolling Annualised Sharpe')
+
+    def plot_results(self, filename=None):
+        stats = self.get_results()
+
+        if self.rolling_sharpe:
+            offset_index = 1
+        else:
+            offset_index = 0
+        vertical_sections = 5 + offset_index
+        fig = plt.figure(figsize=(10, vertical_sections * 3.5))
+        fig.suptitle(self.title, y=0.94, weight='bold')
+        gs = gridspec.GridSpec(vertical_sections, 3, wspace=0.25, hspace=0.5)
+
+        ax_equity = plt.subplot(gs[:2, :])
+        self._plot_equity(stats, ax=ax_equity)
+
+        if self.rolling_sharpe:
+            ax_sharpe = plt.subplot(gs[2, :])
+            self._plot_rolling_sharpe(stats, ax=ax_sharpe)
+
+        ax_drawdown = plt.subplot(gs[2 + offset_index, :])
+        self._plot_drawdown(stats, ax=ax_drawdown)
+
+        ax_monthly_returns = plt.subplot(gs[3 + offset_index, :2])
+        ax_yearly_returns = plt.subplot(gs[3 + offset_index, 2])
+        ax_txt_curve = plt.subplot(gs[4 + offset_index, 0])
+        ax_txt_trade = plt.subplot(gs[4 + offset_index, 1])
+        ax_txt_time = plt.subplot(gs[4 + offset_index, 2])
+
 #################################################################################################################### OUT-OF-SAMPLE prova1
 import yfinance as yf
 import numpy as np
